@@ -1,0 +1,452 @@
+import Foundation
+import TerrariumCore
+
+private var passedCount = 0
+private var failedCount = 0
+
+private func check(_ condition: @autoclosure () -> Bool, _ message: String, file: StaticString = #file, line: UInt = #line) {
+    if !condition() {
+        fputs("  [FAIL] \(message) (\(file):\(line))\n", stderr)
+        failedCount += 1
+    }
+}
+
+private func runTest(_ name: String, _ block: () -> Void) {
+    let beforeFail = failedCount
+    block()
+    if failedCount == beforeFail {
+        passedCount += 1
+        print("[PASS] \(name)")
+    } else {
+        print("[FAIL] \(name)")
+    }
+}
+
+// MARK: - 独立多生态缸、零起点成长与食盆槽位寻路测试
+
+runTest("test_day0EmptyStart_startsWithNoPlantsCrittersOrCodex") {
+    let save = TerrariumSaveData()
+    let meadow = save.containers.first?.instance
+    check(save.containers.count == 1, "开局应初始化 1 口温润苔原缸")
+    check(meadow?.plants.isEmpty == true, "Day 0 开局植物应为空")
+    check(meadow?.critters.isEmpty == true, "Day 0 开局动物应为空")
+    check(meadow?.enabledDecorIDs.isEmpty == true, "Day 0 开局摆件应为空")
+    check(save.unlockedCodexIDs.isEmpty, "Day 0 开局图鉴应为 0 解锁")
+}
+
+runTest("test_slowIdleEvaporation_lastsHoursWithoutFrequentMisting") {
+    var inst = TerrariumInstanceState.empty(biome: .meadow)
+    inst.humidity = 75
+    inst.enabledDecorIDs = ["shallow_pool"]
+    inst.plants = [PlantInstance(speciesID: "moss", coord: GridCoord(col: 4, row: 4), stage: .mature)]
+
+    var pts = 0
+    var codex: [String] = []
+    // 挂机 1 小时，含浅水洼(-20%) + 苔藓(-3%)，蒸发应 <= 4%/h（不用频繁加水）
+    TerrariumSimulation.advanceInstance(instance: &inst, ecoPoints: &pts, unlockedCodexIDs: &codex, elapsedSeconds: 3600, allowRandomSpawn: false)
+    check(inst.humidity >= 70, "1 小时内有浅水洼保湿湿度降幅应 <= 5%，实际 \(inst.humidity)%")
+}
+
+runTest("test_coldStartAndVisitorSettlement_progressesFromBareSoil") {
+    var save = TerrariumSaveData()
+    var meadow = save.containers[0].instance
+    meadow.humidity = 50 // 玩家喷水润土
+
+    // 15 秒冷启动加速应萌发第 1 株苔藓
+    let s1 = TerrariumSimulation.advanceInstance(
+        instance: &meadow,
+        ecoPoints: &save.ecoPoints,
+        unlockedCodexIDs: &save.unlockedCodexIDs,
+        elapsedSeconds: 20
+    )
+    check(meadow.plants.count == 1 && meadow.plants.first?.speciesID == "moss", "冷启动后应先萌发绒球苔藓")
+    check(s1.newlyUnlockedCodexIDs.contains("moss"), "应解锁苔藓图鉴")
+
+    // 达成苔藓 + 湿润门槛后，蜗牛购买条件达标（不再免费刷出未购买访客）
+    meadow.foodBowlPortions = 2
+    TerrariumSimulation.evaluateCritterEcology(instance: &meadow)
+    check(meadow.critters.isEmpty, "改用生态点购买后，投喂不应免费白嫖生成未购买动物")
+    let elig = TerrariumSimulation.critterUnlockEligibility(kind: .snail, instance: meadow)
+    check(elig.eligible, "有苔藓与湿度≥45%后，蜗牛应满足购买解锁资格")
+}
+
+runTest("test_multiTerrariumIsolation_meadowAndSandAreCompletelyIndependent") {
+    var save = TerrariumSaveData()
+    var meadow = save.containers[0].instance
+    meadow.plants = [PlantInstance(speciesID: "fern", coord: GridCoord(col: 2, row: 2), stage: .mature)]
+    meadow.enabledDecorIDs = ["shallow_pool"]
+    meadow.critters = [CritterPersistentState(kind: .treeFrog, residency: .resident, mealsEaten: 2, coord: GridCoord(col: 5, row: 5))]
+    save.containers[0].instance = meadow
+
+    // 再购置两口独立缸体：第二口苔原缸（证明同类型可多缸）与沙地缸
+    let secondMeadow = TerrariumContainer(customName: "苔原缸 #2", instance: TerrariumInstanceState.empty(biome: .meadow))
+    let sandTank = TerrariumContainer(customName: "暖阳沙地 #1", instance: TerrariumInstanceState.empty(biome: .sand))
+    save.containers.append(secondMeadow)
+    save.containers.append(sandTank)
+
+    check(save.containers[1].instance.plants.isEmpty && save.containers[2].instance.plants.isEmpty, "新增第二口苔原缸与沙地缸必须完全空白独立")
+    let preservedMeadow = save.containers[0].instance
+    check(preservedMeadow.plants.count == 1 && preservedMeadow.critters.count == 1 && preservedMeadow.enabledDecorIDs == ["shallow_pool"], "切换后第一口苔原缸的植物、动物与摆件必须原封不动")
+}
+
+runTest("test_specialExclusiveCritters_requireSpecialPlantsAndEnvironment") {
+    // 1. 月光小飞蛾必须有特殊植物 微光菇(glow_shroom) + 夜晚 + 高湿
+    var meadow = TerrariumInstanceState.empty(biome: .meadow)
+    meadow.atmosphere = .night
+    meadow.humidity = 78
+    meadow.plants = [PlantInstance(speciesID: "fern", coord: GridCoord(col: 2, row: 2), stage: .mature)]
+    var unlocks = TerrariumSimulation.evaluateCodexUnlocks(instance: meadow, alreadyUnlocked: [])
+    check(!unlocks.contains("moon_moth"), "没有微光菇时不应解锁月光小飞蛾")
+
+    meadow.plants.append(PlantInstance(speciesID: "glow_shroom", coord: GridCoord(col: 3, row: 3), stage: .mature))
+    unlocks = TerrariumSimulation.evaluateCodexUnlocks(instance: meadow, alreadyUnlocked: [])
+    check(unlocks.contains("moon_moth"), "拥有微光菇 + 夜晚 + 高湿应解锁月光小飞蛾")
+
+    // 2. 琉璃圣甲虫购买门槛必须拥有特殊植物 金琥仙人球(cactus) + 星点芦荟(aloe) + 暖干
+    var sand = TerrariumInstanceState.empty(biome: .sand)
+    sand.temperature = 28
+    sand.humidity = 38
+    sand.plants = [PlantInstance(speciesID: "succulent", coord: GridCoord(col: 3, row: 3), stage: .mature)]
+    check(!TerrariumSimulation.critterUnlockEligibility(kind: .scarab, instance: sand).eligible, "缺少仙人球和芦荟时不应达标琉璃圣甲虫")
+
+    sand.plants.append(PlantInstance(speciesID: "cactus", coord: GridCoord(col: 4, row: 4), stage: .mature))
+    sand.plants.append(PlantInstance(speciesID: "aloe", coord: GridCoord(col: 6, row: 4), stage: .mature))
+    check(TerrariumSimulation.critterUnlockEligibility(kind: .scarab, instance: sand).eligible, "仙人球 + 芦荟 + 暖干应达标琉璃圣甲虫领养条件")
+}
+
+runTest("test_mildHidingAndReturn_whenNicheDecorRemovedAndRestored") {
+    var meadow = TerrariumInstanceState.empty(biome: .meadow)
+    meadow.humidity = 65
+    meadow.enabledDecorIDs = ["shallow_pool"]
+    meadow.plants = [PlantInstance(speciesID: "fern", coord: GridCoord(col: 2, row: 2), stage: .mature)]
+    meadow.critters = [CritterPersistentState(kind: .treeFrog, residency: .resident, mealsEaten: 2, coord: GridCoord(col: 5, row: 5))]
+
+    // 收起浅水洼，树蛙应温和隐匿而不删除记录
+    meadow.enabledDecorIDs = []
+    TerrariumSimulation.evaluateCritterEcology(instance: &meadow)
+    check(meadow.critters.first?.residency == .hidden, "移除浅水洼后树蛙应温和隐匿")
+
+    // 放回浅水洼，树蛙立刻复出
+    meadow.enabledDecorIDs = ["shallow_pool"]
+    TerrariumSimulation.evaluateCritterEcology(instance: &meadow)
+    check(meadow.critters.first?.residency == .resident, "放回浅水洼后树蛙应立刻复出")
+}
+
+runTest("test_foodBowlReservation_assignsDistinctAdjacentSlots") {
+    let blocked = GridPathfinder.buildBlockedSet(enabledDecorIDs: ["shallow_pool", "driftwood"], plants: [])
+    let path1 = GridPathfinder.findPathToFoodBowl(from: GridCoord(col: 1, row: 5), blocked: blocked, reservedSlots: [])
+    check(!path1.isEmpty, "第一只动物应能寻路到食盆旁")
+    let slot1 = path1.last!
+    let path2 = GridPathfinder.findPathToFoodBowl(from: GridCoord(col: 8, row: 6), blocked: blocked, reservedSlots: [slot1])
+    check(!path2.isEmpty, "第二只动物应能寻路到食盆另一个空槽位")
+    check(path2.last != slot1, "两只动物不应挤占食盆同一格位")
+}
+
+runTest("test_settleOfflineAll_executesWithoutExclusivityConflict") {
+    let past = Date().addingTimeInterval(-3600)
+    var meadowInst = TerrariumInstanceState.empty(biome: .meadow, now: past)
+    meadowInst.humidity = 65
+    meadowInst.plants = [PlantInstance(speciesID: "moss", coord: GridCoord(col: 4, row: 4), stage: .mature)]
+    let sandInst = TerrariumInstanceState.empty(biome: .sand, now: past)
+
+    let c1 = TerrariumContainer(customName: "苔原 #1", instance: meadowInst)
+    let c2 = TerrariumContainer(customName: "沙地 #1", instance: sandInst)
+    var save = TerrariumSaveData(
+        containers: [c1, c2],
+        activeContainerID: c1.id,
+        ecoPoints: 10,
+        lastSavedAt: past
+    )
+
+    let summary = TerrariumSimulation.settleOfflineAll(data: &save, now: Date())
+    check(summary.totalEarnedEcoPoints > 0, "多缸离线总结算应正常产出生态点")
+}
+
+// 9. 食盆最前排防遮挡净空与后方进食槽位优先断言
+runTest("test_foodBowlForwardClearance_neverOccludesAndUsesRearSlots") {
+    let bowl = TerrariumConfig.foodBowlCoord
+    check(bowl == GridCoord(col: 9, row: 9), "食盆应固定位于沙盘最前端视觉中心 (9,9)")
+    let nonPlantable = GridPathfinder.buildNonPlantableSet(enabledDecorIDs: ["shallow_pool", "sand_pebbles", "driftwood", "boulder", "sand_rock", "sand_wood"], plants: [])
+    for fwd in TerrariumConfig.foodBowlForwardCoords {
+        check(nonPlantable.contains(fwd), "食盆正前方格 \(fwd) 应被纳入禁种保护区")
+    }
+
+    let blocked = GridPathfinder.buildBlockedSet(enabledDecorIDs: [], plants: [])
+    for fwd in TerrariumConfig.foodBowlForwardCoords {
+        check(blocked.contains(fwd), "食盆正前方格 \(fwd) 应阻断小动物巡逻站位")
+    }
+
+    // 小动物位于食盆右侧时，依然优先寻路至后侧进食槽位 (9,8)/(8,9)，不阻塞正前方
+    let path1 = GridPathfinder.findPathToFoodBowl(from: GridCoord(col: 10, row: 7), blocked: blocked)
+    if let slot1 = path1.last {
+        check(slot1.col + slot1.row < bowl.col + bowl.row, "进食槽位应严格优先选择食盆后方邻接格: got \(slot1)")
+        // 若该后方槽位已被占用，第二只动物应去另一个后方槽位
+        let path2 = GridPathfinder.findPathToFoodBowl(from: GridCoord(col: 7, row: 9), blocked: blocked, reservedSlots: [slot1])
+        if let slot2 = path2.last {
+            check(slot2 != slot1 && (slot2.col + slot2.row < bowl.col + bowl.row), "同伴占用一个后方槽位后，第二只应优先选择另一个后方槽位")
+        } else {
+            check(false, "第二只小动物未能找到食盆后方槽位")
+        }
+    } else {
+        check(false, "第一只小动物未能找到食盆路径")
+    }
+}
+
+// 10. 旧版 CritterPersistentState JSON 向后兼容解码 + 生态位停驻坐标断言
+runTest("test_affinityCodableBackwardCompatibility_andNichePerching") {
+    let legacyJSON = #"{"kind":"snail","residency":"resident","mealsEaten":2,"hunger":15.0,"coord":{"col":4,"row":5}}"#
+    let decoded = try? JSONDecoder().decode(CritterPersistentState.self, from: Data(legacyJSON.utf8))
+    check(decoded != nil, "旧版无 nickname/affinity/personality 字段 JSON 应无缝解码")
+    check(decoded?.affinity == 0, "旧存档缺省好感度应为 0")
+    check(decoded?.personality == TerrariumConfig.defaultPersonality(for: .snail), "旧存档缺省个性应匹配默认个性")
+
+    check(TerrariumConfig.nicheSpot(for: .treeFrog, enabledDecorIDs: []) == nil, "未启用浅水洼时树蛙无水洼停驻点")
+    check(TerrariumConfig.nicheSpot(for: .treeFrog, enabledDecorIDs: ["shallow_pool"]) == GridCoord(col: 8, row: 1), "启用浅水洼后树蛙应优先停驻至水洼原点格")
+    check(TerrariumConfig.nicheSpot(for: .sandGecko, enabledDecorIDs: ["sand_rock"]) == GridCoord(col: 8, row: 3), "启用红砂岩后守宫应有砂岩旁晒背点")
+}
+
+// 11. 独角仙、食物链同缸互斥与摆件自由摆放断言
+runTest("test_rhinoBeetle_foodChainExclusion_andDecorFreePlacement") {
+    var meadow = TerrariumInstanceState.empty(biome: .meadow)
+    meadow.humidity = 65
+    meadow.enabledDecorIDs = ["driftwood", "shallow_pool"]
+    meadow.plants = [
+        PlantInstance(speciesID: "moss", coord: GridCoord(col: 0, row: 2), stage: .mature),
+        PlantInstance(speciesID: "fern", coord: GridCoord(col: 6, row: 2), stage: .mature)
+    ]
+
+    check(TerrariumSimulation.critterUnlockEligibility(kind: .rhinoBeetle, instance: meadow).eligible, "腐殖沉木 + 卷叶蕨 + 高湿应解锁独角仙购买门槛")
+    TerrariumSimulation.placeOrSwapCritter(kind: .snail, instance: &meadow)
+    TerrariumSimulation.placeOrSwapCritter(kind: .rhinoBeetle, instance: &meadow)
+    let bothInsectsActive = meadow.critters.filter { $0.residency == .resident }.map(\.kind)
+    check(bothInsectsActive.contains(.snail) && bothInsectsActive.contains(.rhinoBeetle), "蜗牛与独角仙属同一微虫共生群，可同缸共存")
+
+    // 放入捕食者绿豆树蛙 -> 自动将蜗牛与独角仙收进生物仓 (.stored)
+    let swapped = TerrariumSimulation.placeOrSwapCritter(kind: .treeFrog, instance: &meadow)
+    check(swapped.contains(.snail) && swapped.contains(.rhinoBeetle), "放入树蛙时应因食物链互斥自动收纳蜗牛与独角仙")
+    check(meadow.critters.first(where: { $0.kind == .treeFrog })?.residency == .resident, "绿豆树蛙应进入活跃展示态")
+    check(meadow.critters.first(where: { $0.kind == .rhinoBeetle })?.residency == .stored, "独角仙应被安全移入生物仓(.stored)")
+
+    // 摆件自由摆放校验：不得超出边界、不得踩上植物或食盆保护区
+    check(!GridPathfinder.canPlaceDecor(id: "driftwood", at: GridCoord(col: 9, row: 9), enabledDecorIDs: meadow.enabledDecorIDs, decorOrigins: meadow.decorOrigins, plants: meadow.plants), "3x2 沉木不得摆出边界或侵入食盆前方")
+    check(GridPathfinder.canPlaceDecor(id: "driftwood", at: GridCoord(col: 1, row: 3), enabledDecorIDs: meadow.enabledDecorIDs, decorOrigins: meadow.decorOrigins, plants: meadow.plants), "合法空地应允许重新摆放沉木")
+
+    meadow.decorOrigins["driftwood"] = GridCoord(col: 1, row: 3)
+    let movedFootprint = TerrariumConfig.footprint(for: "driftwood", decorOrigins: meadow.decorOrigins)
+    check(movedFootprint.contains(GridCoord(col: 1, row: 3)) && movedFootprint.contains(GridCoord(col: 3, row: 4)), "摆件移动后占地坐标应即时跟随新原点更新")
+    check(TerrariumConfig.nicheSpot(for: .rhinoBeetle, enabledDecorIDs: meadow.enabledDecorIDs, decorOrigins: meadow.decorOrigins) == GridCoord(col: 2, row: 2), "生物生态位停驻点应随沉木新位置自动更新")
+}
+
+// 12. 物理温控开关（解决夜晚沙地无法到达圣甲虫 27°C）、v3->v4 存档迁移与雨林缸变色龙生态断言
+runTest("test_thermalControlHeating_v3Migration_andRainforestChameleon") {
+    // A. 夜晚沙地自然基线仅 21°C，开启加热灯后稳态应升至 27°C 且快速推进达标以解锁圣甲虫
+    var sandNight = TerrariumInstanceState.empty(biome: .sand)
+    sandNight.atmosphere = .night
+    sandNight.temperature = 21
+    sandNight.humidity = 38
+    sandNight.plants = [
+        PlantInstance(speciesID: "cactus", coord: GridCoord(col: 4, row: 4), stage: .mature),
+        PlantInstance(speciesID: "aloe", coord: GridCoord(col: 5, row: 4), stage: .mature)
+    ]
+    check(!TerrariumSimulation.critterUnlockEligibility(kind: .scarab, instance: sandNight).eligible, "夜晚 21°C 时应暂未达到圣甲虫 27°C 门槛")
+
+    sandNight.thermalMode = .heating
+    var pts = 0
+    var codex: [String] = []
+    TerrariumSimulation.advanceInstance(instance: &sandNight, ecoPoints: &pts, unlockedCodexIDs: &codex, elapsedSeconds: 1200, allowRandomSpawn: false)
+    check(sandNight.temperature >= 27, "开启晒背加热灯挂机 20 分钟后夜晚沙地应成功升温至 ≥27°C，实际 \(sandNight.temperature)°C")
+    check(TerrariumSimulation.critterUnlockEligibility(kind: .scarab, instance: sandNight).eligible, "加热后圣甲虫应顺利达标可购")
+
+    // B. 雨林缸植物萌发 + 变色龙与雨林昆虫食物链互斥
+    var rain = TerrariumInstanceState.empty(biome: .rainforest)
+    rain.humidity = 75
+    rain.temperature = 26
+    rain.enabledDecorIDs = ["rainforest_vine", "rainforest_bark"]
+    let spawned = TerrariumSimulation.attemptRandomPlantSpawn(instance: &rain)
+    check(spawned?.speciesID == "monstera", "雨林缸冷启动应优先萌发龟背竹")
+    rain.plants.append(PlantInstance(speciesID: "bromeliad", coord: GridCoord(col: 6, row: 5), stage: .mature))
+    check(TerrariumSimulation.critterUnlockEligibility(kind: .chameleon, instance: rain).eligible, "藤蔓+双雨林植+26°C+75%湿应解锁变色龙")
+
+    TerrariumSimulation.placeOrSwapCritter(kind: .leafInsect, instance: &rain)
+    let swapped = TerrariumSimulation.placeOrSwapCritter(kind: .chameleon, instance: &rain)
+    check(swapped.contains(.leafInsect), "放入变色龙应自动将枯叶脩收起至生物仓")
+
+    // C. v3 历史 JSON 向 v4 多容器结构无缝迁移
+    let v3Meadow = TerrariumInstanceState.empty(biome: .meadow)
+    let v3Data = try! JSONEncoder().encode([
+        "schemaVersion": AnyCodableBox(3),
+        "currentBiome": AnyCodableBox(TerrariumBiome.meadow.rawValue),
+        "unlockedBiomes": AnyCodableBox([TerrariumBiome.meadow.rawValue]),
+        "terrariums": AnyCodableBox([TerrariumBiome.meadow.rawValue: v3Meadow]),
+        "ecoPoints": AnyCodableBox(19),
+        "unlockedCodexIDs": AnyCodableBox(["moss"])
+    ])
+    let migrated = try? JSONDecoder().decode(TerrariumSaveData.self, from: v3Data)
+    check(migrated?.schemaVersion == 4 && migrated?.containers.count == 1 && migrated?.ecoPoints == 19, "v3 存档应无损迁移至 v4 容器列表并保留生态点")
+}
+
+private struct AnyCodableBox: Encodable {
+    private let encodeClosure: (Encoder) throws -> Void
+    init<T: Encodable>(_ value: T) {
+        self.encodeClosure = value.encode
+    }
+    func encode(to encoder: Encoder) throws {
+        try encodeClosure(encoder)
+    }
+}
+
+// 13. 拆缸退点核算（防刷点）+ 碧波鱼缸水生生态与小鱼螯虾食物链互斥断言
+runTest("test_deleteTankRefund_andAquaticFishTankFoodChain") {
+    // A. 碧波鱼缸冷启动长出莫斯藻球 + 樱花米虾/红绿灯鱼 vs 蓝螯虾食物链互斥
+    var aquatic = TerrariumInstanceState.empty(biome: .aquatic)
+    aquatic.humidity = 75
+    aquatic.temperature = 25
+    aquatic.enabledDecorIDs = ["aquatic_bubble_rock", "aquatic_castle"]
+    aquatic.unlockedDecorIDs = ["aquatic_bubble_rock", "aquatic_castle"]
+    let firstMarimo = TerrariumSimulation.attemptRandomPlantSpawn(instance: &aquatic)
+    check(firstMarimo?.speciesID == "marimo", "鱼缸冷启动应萌发莫斯藻球")
+    aquatic.plants.append(PlantInstance(speciesID: "anubias", coord: GridCoord(col: 5, row: 5), stage: .mature))
+
+    check(TerrariumSimulation.critterUnlockEligibility(kind: .cherryShrimp, instance: aquatic).eligible, "有陶瓷躲避屋与莫斯藻球应达标樱花米虾")
+    check(TerrariumSimulation.critterUnlockEligibility(kind: .neonTetra, instance: aquatic).eligible, "有皇冠水草与高溶氧应达标红绿灯鱼")
+    check(TerrariumSimulation.critterUnlockEligibility(kind: .crayfish, instance: aquatic).eligible, "有火山石、躲避屋与水草应达标蓝螯虾")
+
+    TerrariumSimulation.placeOrSwapCritter(kind: .cherryShrimp, instance: &aquatic)
+    TerrariumSimulation.placeOrSwapCritter(kind: .neonTetra, instance: &aquatic)
+    // 半月斗鱼领地独立：不可与鱼虾混养，放入斗鱼应自动收纳米虾与灯鱼
+    aquatic.plants.append(PlantInstance(speciesID: "lotus", coord: GridCoord(col: 4, row: 4), stage: .mature))
+    check(!TerrariumConfig.areCompatibleInSameTank(.bettaFish, .neonTetra), "斗鱼与红绿灯鱼不得同缸混养")
+    check(!TerrariumConfig.areCompatibleInSameTank(.bettaFish, .cherryShrimp), "斗鱼与樱花米虾不得同缸混养")
+    check(!TerrariumConfig.areCompatibleInSameTank(.bettaFish, .crayfish), "斗鱼与蓝螯虾不得同缸混养")
+    let bettaSwapped = TerrariumSimulation.placeOrSwapCritter(kind: .bettaFish, instance: &aquatic)
+    check(bettaSwapped.contains(.cherryShrimp) && bettaSwapped.contains(.neonTetra), "放入半月斗鱼应自动将米虾与灯鱼转入生物仓")
+
+    // 历史混养存档平滑兼容性迁移：若旧档里同时 resident 斗鱼与灯鱼/米虾，normalize 应保留斗鱼并温柔转仓鱼虾
+    aquatic.critters = [
+        CritterPersistentState(kind: .cherryShrimp, residency: .resident, mealsEaten: 1, coord: GridCoord(col: 2, row: 4)),
+        CritterPersistentState(kind: .neonTetra, residency: .resident, mealsEaten: 3, coord: GridCoord(col: 3, row: 3), nickname: "老灯鱼"),
+        CritterPersistentState(kind: .bettaFish, residency: .resident, mealsEaten: 2, coord: GridCoord(col: 5, row: 5))
+    ]
+    let migrated = TerrariumSimulation.normalizeFoodChainCompatibility(instance: &aquatic)
+    check(migrated == [.cherryShrimp, .neonTetra], "旧档混养迁移应温和收纳冲突的樱花米虾与红绿灯鱼")
+    check(aquatic.critters.first(where: { $0.kind == .bettaFish })?.residency == .resident, "迁移后半月斗鱼应保持 resident")
+    check(aquatic.critters.first(where: { $0.kind == .neonTetra })?.residency == .stored && aquatic.critters.first(where: { $0.kind == .neonTetra })?.nickname == "老灯鱼", "被收纳的红绿灯鱼应转为 .stored 且保留全部养成数据")
+
+    // 蓝螯虾与灯鱼米虾互斥 + 拆缸退点核算
+    let crayfishSwapped = TerrariumSimulation.placeOrSwapCritter(kind: .crayfish, instance: &aquatic)
+    check(crayfishSwapped.contains(.bettaFish), "放入蓝螯虾应与斗鱼互斥并收纳斗鱼")
+
+    // 睡莲水面 (gz = 38.0) 正逆向等距投影闭环校验
+    let surfaceScreen = TerrariumConfig.isoToScreen(gx: 4.5, gy: 4.5, gz: TerrariumConfig.waterSurfaceGZ)
+    let surfaceBack = TerrariumConfig.screenToIso(x: surfaceScreen.x, y: surfaceScreen.y, gz: TerrariumConfig.waterSurfaceGZ)
+    check(Int(floor(surfaceBack.gx)) == 4 && Int(floor(surfaceBack.gy)) == 4, "水面 gz=38.0 点击反向投影应精确命中 (4,4)")
+
+    // B. 拆缸 75% 折旧退点精准核算：含购置缸价(55) + 摆件(14+9) + 生物(10+16+25+30) + 加热棒(8) = 167 -> 75% 退 125 点
+    aquatic.hasHeatLamp = true
+    let container = TerrariumContainer(
+        customName: "我的水草缸",
+        purchasedCost: TerrariumConfig.tankPurchaseCost(for: .aquatic, existingTankCount: 1),
+        instance: aquatic
+    )
+    let refund = TerrariumSimulation.refundEcoPoints(for: container)
+    check(refund == 125, "拆缸按 75% 折旧退点应退回 125 点，实际 \(refund)")
+
+    // 免费初始缸购置成本为 0，不能空手拆缸刷购置点
+    let starterFree = TerrariumContainer(customName: "苔原缸 #1", purchasedCost: 0, instance: TerrariumInstanceState.empty(biome: .meadow))
+    check(TerrariumSimulation.refundEcoPoints(for: starterFree) == 0, "初始免费空缸拆缸应退 0 点防止刷点")
+}
+
+// 14. 长周期擦雾/除藻速率验证 + 本地实测气温联动与冬季加热兜底断言
+runTest("test_slowFogAlgaeRates_andLocalOutdoorTempLinkage") {
+    var pts = 0
+    var codex: [String] = []
+
+    // A. 高湿苔原擦雾不应瞬间满雾，挂机 15 分钟内应仍保持轻微（<0.40）
+    var meadow = TerrariumInstanceState.empty(biome: .meadow)
+    meadow.humidity = 88
+    meadow.glassFogLevel = 0.0
+    TerrariumSimulation.advanceInstance(instance: &meadow, ecoPoints: &pts, unlockedCodexIDs: &codex, elapsedSeconds: 900, allowRandomSpawn: false)
+    check(meadow.glassFogLevel < 0.40, "高湿 15 分钟内水雾应缓慢累积，不应瞬间满雾，实际 \(meadow.glassFogLevel)")
+
+    // B. 碧波鱼缸除藻应更持久：挂机 30 分钟内藻垢应低于 0.30
+    var aquatic = TerrariumInstanceState.empty(biome: .aquatic)
+    aquatic.humidity = 80
+    aquatic.glassFogLevel = 0.0
+    TerrariumSimulation.advanceInstance(instance: &aquatic, ecoPoints: &pts, unlockedCodexIDs: &codex, elapsedSeconds: 1800, allowRandomSpawn: false)
+    check(aquatic.glassFogLevel < 0.30, "鱼缸 30 分钟内藻垢应保持轻微，不应频繁除藻，实际 \(aquatic.glassFogLevel)")
+
+    // C. 本地室外低温 (10°C) 联动 + 沙地加热灯防锁死兜底 (仍能到达 >=27°C 解锁圣甲虫)
+    let coldSandNatural = TerrariumConfig.baseAmbientTemp(for: .day, biome: .sand, thermalMode: .natural, localOutdoorTempC: 10)
+    let coldSandHeated = TerrariumConfig.baseAmbientTemp(for: .day, biome: .sand, thermalMode: .heating, localOutdoorTempC: 10)
+    check(coldSandNatural <= 18, "室外 10°C 时沙地裸缸自然温度应联动下降，实际 \(coldSandNatural)°C")
+    check(coldSandHeated >= 28, "即使室外 10°C 冬天，开启加热灯也应保障沙地升温至 ≥28°C 防锁死，实际 \(coldSandHeated)°C")
+
+    // D. 夏季高温 (33°C) 苔原开启降温扇应可降回 <=19°C 以培育微光菇
+    let hotMeadowCooled = TerrariumConfig.baseAmbientTemp(for: .day, biome: .meadow, thermalMode: .cooling, localOutdoorTempC: 33)
+    check(hotMeadowCooled <= 18, "即使室外 33°C 夏天，开启降温扇应可将苔原降至 ≤18°C，实际 \(hotMeadowCooled)°C")
+}
+
+// 15. 五阶羁绊性格特技 + 经济防漏洞全检 + 鱼缸后壁喂食圈解放前景断言
+runTest("test_affinityPerks_economyAntiExploits_andAquaticRearFeedingRing") {
+    // A. 好感度五阶特技验证
+    let snail = CritterPersistentState(kind: .snail, residency: .resident, coord: GridCoord(col: 3, row: 3), affinity: 100)
+    check(TerrariumConfig.affinityStage(for: snail.affinity) == .soulmate, "好感度 100 应对应 Lv.5 挚友")
+    check(abs(TerrariumSimulation.critterHungerMultiplier(for: snail) - 0.80) < 0.001, "慢性子挚友饥饿消耗应降低 20%")
+    let rhino = CritterPersistentState(kind: .rhinoBeetle, residency: .resident, coord: GridCoord(col: 4, row: 4), affinity: 100)
+    check(abs(TerrariumSimulation.tankEcoSpeedBoost(for: [snail, rhino]) - 0.10) < 0.001, "护木侠挚友生态共振应加速产点 +10%")
+
+    // B. 生物仓 .stored 不得在离线结算中偷吃食盆刷点
+    var pts = 0
+    var codex: [String] = []
+    var tank = TerrariumInstanceState.empty(biome: .meadow)
+    tank.humidity = 65
+    tank.foodBowlPortions = 3
+    tank.critters = [CritterPersistentState(kind: .treeFrog, residency: .stored, hunger: 80.0, coord: GridCoord(col: 5, row: 5))]
+    let storedSummary = TerrariumSimulation.advanceInstance(instance: &tank, ecoPoints: &pts, unlockedCodexIDs: &codex, elapsedSeconds: 3600, allowRandomSpawn: false)
+    check(tank.foodBowlPortions == 3 && storedSummary.earnedEcoPoints == 0, "存放在生物仓(.stored)的生物不得在离线偷吃粮食或白嫖产点")
+
+    // C. 全缸枯萎植物与缺氧鱼缸/干涸沙地口径防呆
+    var witheredTank = TerrariumInstanceState.empty(biome: .meadow)
+    witheredTank.humidity = 65
+    witheredTank.plants = [PlantInstance(speciesID: "moss", coord: GridCoord(col: 2, row: 2), stage: .withered)]
+    let witheredSum = TerrariumSimulation.advanceInstance(instance: &witheredTank, ecoPoints: &pts, unlockedCodexIDs: &codex, elapsedSeconds: 1800, allowRandomSpawn: false)
+    check(witheredSum.earnedEcoPoints == 0, "全缸仅剩枯萎植物时不得继续自然产点")
+
+    check(!TerrariumSimulation.isOptimalEnvironment(temperature: 25, humidity: 45, biome: .aquatic), "鱼缸溶氧不足 60% 时不得按最佳产率加速")
+    check(TerrariumSimulation.isOptimalEnvironment(temperature: 25, humidity: 70, biome: .aquatic), "鱼缸 25°C 且溶氧 ≥60% 时应达成最佳产率")
+
+    var drySandCodex = ["succulent"]
+    var drySand = TerrariumInstanceState.empty(biome: .sand)
+    drySand.humidity = 25 // 等于安全蒸发下限 25%，但低于 sandEcoPointMinHumidity(26%)
+    drySand.plants = [PlantInstance(speciesID: "succulent", coord: GridCoord(col: 4, row: 4), stage: .mature)]
+    let drySandSum = TerrariumSimulation.advanceInstance(instance: &drySand, ecoPoints: &pts, unlockedCodexIDs: &drySandCodex, elapsedSeconds: 1800, allowRandomSpawn: false)
+    check(drySandSum.earnedEcoPoints == 0, "完全放任干至安全底线(25%)的沙地缸不得继续产点")
+
+    // D. 鱼缸后壁喂食圈 (1,2) 解放前景 (9,9)..(10,10)，且鱼类优先前景侧 (2,2)/(1,3) 啄食
+    let aqNonPlant = GridPathfinder.buildNonPlantableSet(enabledDecorIDs: [], plants: [], biome: .aquatic)
+    check(!aqNonPlant.contains(GridCoord(col: 9, row: 9)) && !aqNonPlant.contains(GridCoord(col: 10, row: 10)), "鱼缸前景 (9,9)-(10,10) 应彻底解放用于水草造景")
+    check(aqNonPlant.contains(TerrariumConfig.aquaticFeedingCoord), "鱼缸后壁喂食圈格 (1,2) 应避免长出浮水睡莲重叠")
+
+    let aqBlocked = GridPathfinder.buildBlockedSet(enabledDecorIDs: [], plants: [], biome: .aquatic)
+    let fishPath = GridPathfinder.findPathToFoodBowl(from: GridCoord(col: 6, row: 6), blocked: aqBlocked, biome: .aquatic)
+    if let eatSlot = fishPath.last {
+        check(eatSlot.col + eatSlot.row > TerrariumConfig.aquaticFeedingCoord.col + TerrariumConfig.aquaticFeedingCoord.row, "鱼类前往后壁喂食圈应优先停留在前景侧 (col+row > 3): got \(eatSlot)")
+    } else {
+        check(false, "鱼类未能寻路至后壁喂食圈")
+    }
+
+    // E. 全生物正消耗（无图鉴倒赚）与槽位阶梯涨价断言
+    for biome in TerrariumBiome.allCases {
+        for spec in TerrariumConfig.critterShopCatalog(for: biome) {
+            check(spec.cost > TerrariumConfig.codexRewardPoints(for: spec.id), "生物「\(spec.name)」售价(\(spec.cost))必须高于图鉴返点(\(TerrariumConfig.codexRewardPoints(for: spec.id)))")
+        }
+    }
+    check(TerrariumConfig.tankPurchaseCost(for: .aquatic, existingTankCount: 1) == 55, "第 2 口鱼缸售价应为基价 55 点")
+    check(TerrariumConfig.tankPurchaseCost(for: .aquatic, existingTankCount: 2) == 70, "第 3 口起应阶梯加价 +15 点至 70 点")
+    check(TerrariumConfig.tankEfficiencyMultiplier(slotIndex: 0) == 1.0 && TerrariumConfig.tankEfficiencyMultiplier(slotIndex: 1) == 0.80, "第 2 口缸产点效率应递减为 80%")
+}
+
+print("\nSummary: \(passedCount) passed, \(failedCount) failed.")
+if failedCount > 0 {
+    Foundation.exit(1)
+}

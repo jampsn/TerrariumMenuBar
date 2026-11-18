@@ -1,0 +1,902 @@
+import CoreGraphics
+import Foundation
+
+/// 数据驱动核心配置：集中管理 2:1 等距投影、分缸摆件池、舒缓挂机参数与多物种演化规则
+public enum TerrariumConfig {
+    // MARK: - 2:1 等距网格投影规格 (224x176 逻辑像素)
+    public static let stageLogicalWidth: Double = 224.0
+    public static let stageLogicalHeight: Double = 176.0
+    public static let gridCols: Int = 11
+    public static let gridRows: Int = 11
+    public static let isoOriginX: Double = 112.0
+    public static let isoOriginY: Double = 62.0
+    public static let tileHalfW: Double = 8.0
+    public static let tileHalfH: Double = 4.0
+    /// 碧波鱼缸水面精确逻辑高度（对应 tank_water_overlay 水面顶点偏移）
+    public static let waterSurfaceGZ: Double = 38.0
+
+    public static func isoToScreen(gx: Double, gy: Double, gz: Double = 0.0) -> CGPoint {
+        CGPoint(
+            x: isoOriginX + (gx - gy) * tileHalfW,
+            y: isoOriginY + (gx + gy) * tileHalfH - gz
+        )
+    }
+
+    public static func screenToIso(x: Double, y: Double, gz: Double = 0.0) -> (gx: Double, gy: Double) {
+        let dx = (x - isoOriginX) / tileHalfW
+        let dy = ((y + gz) - isoOriginY) / tileHalfH
+        return (0.5 * (dx + dy), 0.5 * (dy - dx))
+    }
+
+    public static func plantSurfaceGZ(for plant: PlantInstance) -> Double {
+        plant.speciesID == "lotus" ? waterSurfaceGZ : 0.0
+    }
+
+    // MARK: - 固定食盆与分缸摆件 Footprint
+    /// 陆生食盆固定于沙盘最前端视觉中心 (9,9) -> screen (112, 138)；鱼缸悬浮喂食圈固定于后壁水域 (1,2) -> 水面 screen (104, 40)
+    public static let foodBowlCoord = GridCoord(col: 9, row: 9)
+    public static let aquaticFeedingCoord = GridCoord(col: 1, row: 2)
+    public static let maxFoodPortions: Int = 5
+
+    public static func feedingCoord(for biome: TerrariumBiome) -> GridCoord {
+        (biome == .aquatic) ? aquaticFeedingCoord : foodBowlCoord
+    }
+
+    public static func feedingProtectedCoords(for biome: TerrariumBiome) -> Set<GridCoord> {
+        // 鱼缸喂食圈漂浮在后方水面 gz=38，仅保护 (1,2) 不种浮水睡莲，彻底释放前景 (9,9)..(10,10) 6格供造景
+        (biome == .aquatic) ? [aquaticFeedingCoord] : foodBowlProtectedCoords
+    }
+
+    /// 食盆本体、后方进食槽位及正前方三格净空保护（严禁植物/摆件遮挡）
+    public static let foodBowlProtectedCoords: Set<GridCoord> = [
+        GridCoord(col: 9, row: 9),
+        GridCoord(col: 8, row: 9),
+        GridCoord(col: 9, row: 8),
+        GridCoord(col: 9, row: 10),
+        GridCoord(col: 10, row: 9),
+        GridCoord(col: 10, row: 10)
+    ]
+
+    /// 食盆正前方三格（动物进食和闲逛停驻时应优先避开，确保食盆始终处于视觉最前沿）
+    public static let foodBowlForwardCoords: Set<GridCoord> = [
+        GridCoord(col: 9, row: 10),
+        GridCoord(col: 10, row: 9),
+        GridCoord(col: 10, row: 10)
+    ]
+
+    public static func decorDimensions(for decorID: String) -> (cols: Int, rows: Int) {
+        switch decorID {
+        case "driftwood", "sand_wood", "rainforest_vine", "aquatic_driftwood": return (3, 2)
+        case "shallow_pool", "sand_rock", "boulder", "rainforest_waterfall", "rainforest_bark", "aquatic_bubble_rock", "aquatic_castle": return (2, 2)
+        case "sand_pebbles": return (2, 1)
+        default: return (1, 1)
+        }
+    }
+
+    public static func defaultDecorOrigin(for decorID: String) -> GridCoord {
+        switch decorID {
+        case "shallow_pool", "sand_rock", "rainforest_waterfall", "aquatic_bubble_rock": return GridCoord(col: 8, row: 1)
+        case "driftwood", "sand_wood", "rainforest_vine", "aquatic_driftwood": return GridCoord(col: 2, row: 3)
+        case "boulder", "rainforest_bark", "aquatic_castle": return GridCoord(col: 1, row: 7)
+        case "sand_pebbles": return GridCoord(col: 8, row: 7)
+        default: return GridCoord(col: 5, row: 5)
+        }
+    }
+
+    public static func effectiveDecorOrigin(for decorID: String, decorOrigins: [String: GridCoord] = [:]) -> GridCoord {
+        decorOrigins[decorID] ?? defaultDecorOrigin(for: decorID)
+    }
+
+    public static func footprint(for decorID: String, decorOrigins: [String: GridCoord] = [:]) -> [GridCoord] {
+        let dims = decorDimensions(for: decorID)
+        let origin = effectiveDecorOrigin(for: decorID, decorOrigins: decorOrigins)
+        var coords: [GridCoord] = []
+        for r in origin.row..<(origin.row + dims.rows) {
+            for c in origin.col..<(origin.col + dims.cols) {
+                coords.append(GridCoord(col: c, row: r))
+            }
+        }
+        return coords
+    }
+
+    public static func decorBlocksMovement(_ decorID: String) -> Bool {
+        // 浅水洼与卵石滩允许动物涉水/踩踏，不死堵路径
+        decorID != "shallow_pool" && decorID != "sand_pebbles"
+    }
+
+    public static func anchorGridPos(for decorID: String, decorOrigins: [String: GridCoord] = [:]) -> (gx: Double, gy: Double) {
+        let dims = decorDimensions(for: decorID)
+        let origin = effectiveDecorOrigin(for: decorID, decorOrigins: decorOrigins)
+        return (
+            gx: Double(origin.col) + Double(dims.cols) * 0.5,
+            gy: Double(origin.row) + Double(dims.rows) * 0.5
+        )
+    }
+
+    // MARK: - 舒缓挂机参数（告别高频操作）
+    public static let tempRange: ClosedRange<Int> = 10...35
+    public static let humidityRange: ClosedRange<Int> = 20...98
+    public static let humiditySafeFloor: Int = 25
+
+    public static let optimalTempRange: ClosedRange<Int> = 20...26
+    public static let optimalHumidityRange: ClosedRange<Int> = 55...75
+    public static let ecoPointMinHumidity: Int = 35
+    public static let sandEcoPointMinHumidity: Int = 26
+
+    /// 基础自然蒸发 rate = 5.0%/h（每 12 分钟才降 1%，保湿满时约 2~4 小时无需频繁加水）
+    public static let baseEvaporationPerHour: Double = 5.0
+
+    public static let dewLightHumidityThreshold: Int = 72
+    public static let dewHeavyHumidityThreshold: Int = 85
+
+    public static let maxPlantsCap: Int = 12
+    public static let coldStartPlantPulseSeconds: TimeInterval = 15.0
+    public static let plantPulseIntervalSeconds: TimeInterval = 600.0
+    public static let plantMatureSeconds: TimeInterval = 300.0
+    public static let plantWiltThresholdSeconds: TimeInterval = 7200.0
+    public static let plantWitherThresholdSeconds: TimeInterval = 14400.0
+
+    public static let backgroundTickSeconds: TimeInterval = 30.0
+    public static let ambientTempRelaxIntervalSeconds: TimeInterval = 1800.0
+    public static let localTempTrackingIntervalSeconds: TimeInterval = 600.0
+    public static let glassFogAccumulationSeconds: TimeInterval = 2700.0
+    public static let aquaticAlgaeAccumulationSeconds: TimeInterval = 7200.0
+    public static let ecoPointBaseIntervalSeconds: TimeInterval = 360.0
+    public static let ecoPointOptimalIntervalSeconds: TimeInterval = 240.0
+    public static let maxOfflineSettlementSeconds: TimeInterval = 8.0 * 3600.0
+    public static let weatherEventIntervalRange: ClosedRange<TimeInterval> = 1200.0...2400.0
+    public static let weatherEventDurationSeconds: TimeInterval = 900.0
+
+    public static let codexUnlockBonusPoints: Int = 3
+    public static let maxTankSlots: Int = 8
+    public static let sandBiomeUnlockCost: Int = 35
+    public static let heatLampCost: Int = 8
+    public static let coolingFanCost: Int = 8
+    public static let tankRefundRatio: Double = 0.75
+
+    // 五阶好感度羁绊与防刷节流参数（0 轻抚直发点）
+    public static let maxAffinity: Int = 100
+    public static let petAffinityCooldownSeconds: TimeInterval = 1200.0 // 20 分钟/只
+    public static let maxDailyEffectivePets: Int = 6
+    public static let startleRecoverySeconds: TimeInterval = 60.0
+    public static let mealRewardCooldownSeconds: TimeInterval = 10800.0 // 3 小时/只进食奖励冷却
+
+    public static func baseTankPurchaseCost(for biome: TerrariumBiome) -> Int {
+        switch biome {
+        case .meadow: return 25
+        case .sand: return 35
+        case .rainforest: return 45
+        case .aquatic: return 55
+        }
+    }
+
+    /// 槽位阶梯定价：第 2 口缸起原价，之后每新增 1 口 +15 点防晚期通胀
+    public static func tankPurchaseCost(for biome: TerrariumBiome, existingTankCount: Int = 1) -> Int {
+        let extraIndex = max(0, existingTankCount - 1)
+        return baseTankPurchaseCost(for: biome) + extraIndex * 15
+    }
+
+    /// 多缸产点递减系数（单缸 100%、2缸 80%、3缸 65%、4缸 55%、5缸起 50%）
+    public static func tankEfficiencyMultiplier(slotIndex: Int) -> Double {
+        switch slotIndex {
+        case 0: return 1.00
+        case 1: return 0.80
+        case 2: return 0.65
+        case 3: return 0.55
+        default: return 0.50
+        }
+    }
+
+    /// 统一分级图鉴奖励：植物 +2、基础动物 +3、稀有/高阶动物 +5
+    public static func codexRewardPoints(for entryID: String) -> Int {
+        switch entryID {
+        case "moss", "clover", "fern", "glow_shroom", "red_shroom",
+             "succulent", "aloe", "cactus", "monstera", "bromeliad", "orchid",
+             "marimo", "anubias", "lotus":
+            return 2
+        case "rhino_beetle", "tree_frog", "firefly", "moon_moth",
+             "sand_gecko", "scarab",
+             "hercules_beetle", "chameleon",
+             "betta_fish", "crayfish":
+            return 5
+        default:
+            return 3
+        }
+    }
+
+    public static func hungerRatePerHour(for kind: CritterKind) -> Double {
+        switch kind {
+        case .snail, .pillBug, .rhinoBeetle, .leafInsect, .cherryShrimp: return 5.0
+        case .treeFrog, .amberBeetle, .herculesBeetle, .neonTetra: return 6.0
+        case .sandGecko, .scarab, .chameleon, .bettaFish, .crayfish: return 7.0
+        }
+    }
+
+    public static func mealsRequiredToSettle(kind: CritterKind, enabledDecorIDs: [String]) -> Int {
+        switch kind {
+        case .snail: return enabledDecorIDs.contains("driftwood") ? 1 : 2
+        case .pillBug, .amberBeetle, .scarab, .rhinoBeetle, .leafInsect, .herculesBeetle, .cherryShrimp, .neonTetra: return 1
+        case .treeFrog, .sandGecko, .chameleon, .bettaFish, .crayfish: return 2
+        }
+    }
+
+    public static func foodChainGroup(for kind: CritterKind) -> FoodChainGroup {
+        switch kind {
+        case .snail, .pillBug, .rhinoBeetle: return .meadowInsects
+        case .treeFrog: return .meadowPredator
+        case .amberBeetle, .scarab: return .sandBeetles
+        case .sandGecko: return .sandPredator
+        case .leafInsect, .herculesBeetle: return .rainforestInsects
+        case .chameleon: return .rainforestPredator
+        case .cherryShrimp, .neonTetra: return .aquaticPeaceful
+        case .bettaFish: return .aquaticBetta
+        case .crayfish: return .aquaticPredator
+        }
+    }
+
+    public enum AffinityStage: Int, Comparable {
+        case acquaintance = 1 // 0~9
+        case familiar = 2     // 10~29
+        case close = 3        // 30~59
+        case trusted = 4      // 60~99
+        case soulmate = 5     // 100
+
+        public static func < (lhs: AffinityStage, rhs: AffinityStage) -> Bool {
+            lhs.rawValue < rhs.rawValue
+        }
+
+        public var title: String {
+            switch self {
+            case .acquaintance: return "Lv.1 初识"
+            case .familiar: return "Lv.2 熟稔"
+            case .close: return "Lv.3 亲近"
+            case .trusted: return "Lv.4 信赖"
+            case .soulmate: return "Lv.5 挚友"
+            }
+        }
+    }
+
+    public enum PersonalityPerkKind {
+        case thrifty   // 慢消化：-10% / -20% 饥饿消耗
+        case energetic // 共振加速：+5% / +10% 挂机产点速率
+        case charming  // 灵动陪伴：-10% 饥饿 + 满级 +5% 产点
+    }
+
+    public static func affinityStage(for affinity: Int) -> AffinityStage {
+        let clamped = min(maxAffinity, max(0, affinity))
+        if clamped >= 100 { return .soulmate }
+        if clamped >= 60 { return .trusted }
+        if clamped >= 30 { return .close }
+        if clamped >= 10 { return .familiar }
+        return .acquaintance
+    }
+
+    public static func personalityPerk(for personality: String) -> PersonalityPerkKind {
+        switch personality {
+        case "慢性子", "害羞团", "静如叶", "守沙者":
+            return .thrifty
+        case "护木侠", "勤劳钳", "角力士", "缸霸", "追光手":
+            return .energetic
+        default:
+            return .charming
+        }
+    }
+
+    public static func perkDescription(for personality: String, stage: AffinityStage) -> String {
+        let kind = personalityPerk(for: personality)
+        switch (kind, stage) {
+        case (_, .acquaintance): return "亲近中(满10解锁栖息偏好)"
+        case (_, .familiar): return "Lv.2 常栖专属摆件旁"
+        case (.thrifty, .close), (.thrifty, .trusted): return "Lv.3 细嚼慢咽(饥饿 -10%)"
+        case (.thrifty, .soulmate): return "Lv.5 极省食量(饥饿 -20%)"
+        case (.energetic, .close), (.energetic, .trusted): return "Lv.3 生态共振(产点 +5%)"
+        case (.energetic, .soulmate): return "Lv.5 旺生共鸣(产点 +10%)"
+        case (.charming, .close), (.charming, .trusted): return "Lv.3 温顺亲人(饥饿 -10%)"
+        case (.charming, .soulmate): return "Lv.5 心灵共鸣(饥饿-10%·产点+5%)"
+        }
+    }
+
+    public static func petReplyText(nickname: String, stage: AffinityStage) -> String {
+        switch stage {
+        case .acquaintance: return "💕 轻轻摸了摸「\(nickname)」· 正在慢慢熟悉你"
+        case .familiar: return "💕 「\(nickname)」蹭了蹭指尖 · 更喜欢靠在专属摆件旁休息啦"
+        case .close: return "💕 「\(nickname)」惬意晃着小身子 · 已激活【性格特技 I】"
+        case .trusted: return "💕 「\(nickname)」完全信任你，即使连点也不容易受惊啦"
+        case .soulmate: return "💛 挚友「\(nickname)」亮起金色心意！已满级激活【性格特技 II】"
+        }
+    }
+
+    public static func areCompatibleInSameTank(_ lhs: CritterKind, _ rhs: CritterKind) -> Bool {
+        foodChainGroup(for: lhs) == foodChainGroup(for: rhs)
+    }
+
+    public static func critterShopCatalog(for biome: TerrariumBiome) -> [CritterShopSpec] {
+        switch biome {
+        case .meadow:
+            return [
+                CritterShopSpec(
+                    kind: .snail,
+                    name: "露珠蜗牛",
+                    biome: .meadow,
+                    cost: 6,
+                    group: .meadowInsects,
+                    assetName: "char_snail_sheet",
+                    frameWidth: 20,
+                    frameHeight: 16,
+                    unlockConditionText: "苔藓≥1 + 湿度≥45%",
+                    foodChainNote: "微虫螺共生群 · 与树蛙互斥"
+                ),
+                CritterShopSpec(
+                    kind: .pillBug,
+                    name: "迷你西瓜虫",
+                    biome: .meadow,
+                    cost: 9,
+                    group: .meadowInsects,
+                    assetName: "char_pillbug_sheet",
+                    frameWidth: 14,
+                    frameHeight: 10,
+                    unlockConditionText: "腐殖沉木 + 苔藓≥1",
+                    foodChainNote: "微虫螺共生群 · 与树蛙互斥"
+                ),
+                CritterShopSpec(
+                    kind: .rhinoBeetle,
+                    name: "栗壳独角仙",
+                    biome: .meadow,
+                    cost: 14,
+                    group: .meadowInsects,
+                    assetName: "char_rhino_beetle_sheet",
+                    frameWidth: 20,
+                    frameHeight: 16,
+                    unlockConditionText: "腐殖沉木 + 卷叶蕨≥1 + 湿度≥55%",
+                    foodChainNote: "微虫螺共生群 · 与树蛙互斥"
+                ),
+                CritterShopSpec(
+                    kind: .treeFrog,
+                    name: "绿豆树蛙",
+                    biome: .meadow,
+                    cost: 18,
+                    group: .meadowPredator,
+                    assetName: "char_frog_sheet",
+                    frameWidth: 24,
+                    frameHeight: 22,
+                    unlockConditionText: "溪石浅水洼 + 卷叶蕨≥1 + 湿度≥55%",
+                    foodChainNote: "两栖捕食者 · 不可与虫螺同缸"
+                )
+            ]
+        case .sand:
+            return [
+                CritterShopSpec(
+                    kind: .amberBeetle,
+                    name: "琥珀甲虫",
+                    biome: .sand,
+                    cost: 10,
+                    group: .sandBeetles,
+                    assetName: "char_beetle_sheet",
+                    frameWidth: 18,
+                    frameHeight: 14,
+                    unlockConditionText: "暖阳卵石滩 + 多肉≥1",
+                    foodChainNote: "沙漠甲虫共生群 · 与守宫互斥"
+                ),
+                CritterShopSpec(
+                    kind: .scarab,
+                    name: "琉璃圣甲虫",
+                    biome: .sand,
+                    cost: 26,
+                    group: .sandBeetles,
+                    assetName: "char_scarab_sheet",
+                    frameWidth: 18,
+                    frameHeight: 14,
+                    unlockConditionText: "仙人球≥1 + 芦荟≥1 + 暖干(≥27°C, ≤42%)",
+                    foodChainNote: "沙漠甲虫共生群 · 与守宫互斥"
+                ),
+                CritterShopSpec(
+                    kind: .sandGecko,
+                    name: "豹纹沙守宫",
+                    biome: .sand,
+                    cost: 18,
+                    group: .sandPredator,
+                    assetName: "char_gecko_sheet",
+                    frameWidth: 24,
+                    frameHeight: 16,
+                    unlockConditionText: "风蚀红砂岩 + 沙地植物≥2 + ≥24°C",
+                    foodChainNote: "沙地捕食者 · 不可与甲虫同缸"
+                )
+            ]
+        case .rainforest:
+            return [
+                CritterShopSpec(
+                    kind: .leafInsect,
+                    name: "枯叶拟态脩",
+                    biome: .rainforest,
+                    cost: 12,
+                    group: .rainforestInsects,
+                    assetName: "char_leaf_insect_sheet",
+                    frameWidth: 18,
+                    frameHeight: 16,
+                    unlockConditionText: "朽木树洞 + 龟背竹≥1 + 湿度≥65%",
+                    foodChainNote: "雨林拟态虫群 · 与变色龙互斥"
+                ),
+                CritterShopSpec(
+                    kind: .herculesBeetle,
+                    name: "长戟大兜虫",
+                    biome: .rainforest,
+                    cost: 22,
+                    group: .rainforestInsects,
+                    assetName: "char_hercules_sheet",
+                    frameWidth: 22,
+                    frameHeight: 16,
+                    unlockConditionText: "朽木树洞 + 热带兰花≥1 + ≥24°C",
+                    foodChainNote: "雨林拟态虫群 · 与变色龙互斥"
+                ),
+                CritterShopSpec(
+                    kind: .chameleon,
+                    name: "七彩高冠变色龙",
+                    biome: .rainforest,
+                    cost: 32,
+                    group: .rainforestPredator,
+                    assetName: "char_chameleon_green",
+                    frameWidth: 26,
+                    frameHeight: 20,
+                    unlockConditionText: "藤蔓攀爬架 + 龟背竹/凤梨≥2 + ≥25°C + 湿度≥70%",
+                    foodChainNote: "树栖捕食者（随环境动态变色）· 互斥虫群"
+                )
+            ]
+        case .aquatic:
+            return [
+                CritterShopSpec(
+                    kind: .cherryShrimp,
+                    name: "樱花米虾",
+                    biome: .aquatic,
+                    cost: 10,
+                    group: .aquaticPeaceful,
+                    assetName: "char_shrimp_sheet",
+                    frameWidth: 18,
+                    frameHeight: 14,
+                    unlockConditionText: "陶瓷躲避屋 + 莫斯藻球≥1",
+                    foodChainNote: "温顺鱼虾共生群 · 与斗鱼/蓝螯虾互斥"
+                ),
+                CritterShopSpec(
+                    kind: .neonTetra,
+                    name: "红绿灯鱼群",
+                    biome: .aquatic,
+                    cost: 16,
+                    group: .aquaticPeaceful,
+                    assetName: "char_tetra_sheet",
+                    frameWidth: 18,
+                    frameHeight: 12,
+                    unlockConditionText: "皇冠水草≥1 + 溶氧≥65%（5尾成群）",
+                    foodChainNote: "中层群游观赏鱼 · 与斗鱼/蓝螯虾互斥"
+                ),
+                CritterShopSpec(
+                    kind: .bettaFish,
+                    name: "半月斗鱼",
+                    biome: .aquatic,
+                    cost: 25,
+                    group: .aquaticBetta,
+                    assetName: "char_betta_sheet",
+                    frameWidth: 30,
+                    frameHeight: 22,
+                    unlockConditionText: "迷你睡莲≥1 + 水温≥24°C + 溶氧≥72%",
+                    foodChainNote: "好斗领地观赏鱼 · 需单缸独养（不混养）"
+                ),
+                CritterShopSpec(
+                    kind: .crayfish,
+                    name: "天空蓝螯虾",
+                    biome: .aquatic,
+                    cost: 30,
+                    group: .aquaticPredator,
+                    assetName: "char_crayfish_sheet",
+                    frameWidth: 24,
+                    frameHeight: 16,
+                    unlockConditionText: "冒泡火山石 + 躲避屋 + 水草≥1",
+                    foodChainNote: "水底掠食领地 · 不可与鱼虾/斗鱼同缸"
+                )
+            ]
+        }
+    }
+
+    // MARK: - 空中专属物种条件（不参与地面寻路与食物链）
+    public static func isFireflyCondition(biome: TerrariumBiome, atmosphere: SceneAtmosphere, humidity: Int, plants: [PlantInstance], enabledDecorIDs: [String]) -> Bool {
+        guard biome == .meadow else { return false }
+        let hasFlora = plants.contains { $0.speciesID == "clover" || $0.speciesID == "fern" }
+        return (atmosphere == .night || atmosphere == .rain)
+            && humidity >= 65
+            && hasFlora
+            && enabledDecorIDs.contains("driftwood")
+    }
+
+    public static func isMoonMothCondition(biome: TerrariumBiome, atmosphere: SceneAtmosphere, humidity: Int, plants: [PlantInstance]) -> Bool {
+        guard biome == .meadow else { return false }
+        // 高阶专属动物：必须拥有特殊植物「微光菇」+ 夜晚 + 高湿
+        let hasGlowShroom = plants.contains { $0.speciesID == "glow_shroom" && $0.stage != .withered }
+        return hasGlowShroom && atmosphere == .night && humidity >= 72
+    }
+
+    public static func isGlowShroomCondition(temperature: Int, humidity: Int, enabledDecorIDs: [String]) -> Bool {
+        let effectiveTemp = enabledDecorIDs.contains("boulder") ? (temperature - 1) : temperature
+        return effectiveTemp <= 19 && humidity >= 75
+    }
+
+    public static func thermalTempOffset(for mode: ThermalMode) -> Int {
+        switch mode {
+        case .natural: return 0
+        case .heating: return 6
+        case .cooling: return -4
+        }
+    }
+
+    public static func ambientTempRelaxIntervalSeconds(for mode: ThermalMode, localOutdoorTempC: Int? = nil) -> TimeInterval {
+        if mode != .natural { return 180.0 }
+        return (localOutdoorTempC != nil) ? localTempTrackingIntervalSeconds : ambientTempRelaxIntervalSeconds
+    }
+
+    /// 本地实际气温 + 室内微缓冲映射，并保障夹缸加热/降温设备在极端季节仍可触及物种解锁温度门槛
+    public static func baseAmbientTemp(
+        for atmosphere: SceneAtmosphere,
+        biome: TerrariumBiome,
+        thermalMode: ThermalMode = .natural,
+        localOutdoorTempC: Int? = nil
+    ) -> Int {
+        let natural: Int
+        if let outdoor = localOutdoorTempC {
+            let roomTemp: Int
+            if outdoor < 16 {
+                roomTemp = max(12, outdoor + min(6, (18 - outdoor) / 2))
+            } else if outdoor > 29 {
+                roomTemp = min(33, outdoor - min(4, (outdoor - 28) / 2))
+            } else {
+                roomTemp = outdoor
+            }
+            switch biome {
+            case .sand:
+                natural = roomTemp + ((atmosphere == .night) ? 0 : 2)
+            case .rainforest:
+                natural = roomTemp + 1
+            case .aquatic, .meadow:
+                natural = roomTemp
+            }
+        } else {
+            switch biome {
+            case .sand:
+                natural = (atmosphere == .night) ? 21 : 28
+            case .rainforest:
+                natural = (atmosphere == .night) ? 22 : 26
+            case .aquatic:
+                natural = 24
+            case .meadow:
+                switch atmosphere {
+                case .night: natural = 19
+                case .warm: natural = 27
+                case .day, .rain: natural = 22
+                }
+            }
+        }
+
+        let target: Int
+        switch thermalMode {
+        case .natural:
+            target = natural
+        case .heating:
+            let heatingFloor: Int = {
+                switch biome {
+                case .sand: return 28
+                case .rainforest: return 26
+                case .aquatic, .meadow: return 25
+                }
+            }()
+            target = max(natural + thermalTempOffset(for: .heating), heatingFloor)
+        case .cooling:
+            let coolingCeiling: Int = {
+                switch biome {
+                case .meadow: return 18
+                case .aquatic: return 22
+                case .rainforest: return 23
+                case .sand: return 24
+                }
+            }()
+            target = min(natural + thermalTempOffset(for: .cooling), coolingCeiling)
+        }
+        return min(tempRange.upperBound, max(tempRange.lowerBound, target))
+    }
+
+    public static func ambientAtmosphere(for date: Date, biome: TerrariumBiome) -> SceneAtmosphere {
+        let hour = Calendar.current.component(.hour, from: date)
+        if hour >= 18 || hour < 6 {
+            return .night
+        }
+        return (biome == .sand) ? .warm : .day
+    }
+
+    // MARK: - 随机小气候事件池
+    public static let weatherEvents: [WeatherEventDefinition] = [
+        WeatherEventDefinition(
+            id: "cool_rain",
+            title: "林间小雨",
+            effectText: "湿度上升、降温，叶片更容易凝结露珠！",
+            atmosphere: .rain,
+            tempDelta: -4,
+            humidityDelta: 18
+        ),
+        WeatherEventDefinition(
+            id: "warm_sun",
+            title: "暖阳斜照",
+            effectText: "阳光温暖微燥，喜阳植物活力提升！",
+            atmosphere: .warm,
+            tempDelta: 4,
+            humidityDelta: -10
+        ),
+        WeatherEventDefinition(
+            id: "cool_night",
+            title: "深夜微凉",
+            effectText: "夜色降临，微凉空气适合夜间昆虫出没！",
+            atmosphere: .night,
+            tempDelta: -3,
+            humidityDelta: 6
+        ),
+        WeatherEventDefinition(
+            id: "morning_dew",
+            title: "晨露微风",
+            effectText: "空气清新温润，生态箱进入舒适挂机态。",
+            atmosphere: .day,
+            tempDelta: -1,
+            humidityDelta: 8
+        )
+    ]
+
+    // MARK: - 分生态缸专属摆件目录
+    public static func decorCatalog(for biome: TerrariumBiome) -> [DecorItem] {
+        switch biome {
+        case .meadow:
+            return [
+                DecorItem(
+                    id: "driftwood",
+                    name: "腐殖沉木桩",
+                    assetName: "env_driftwood",
+                    biome: .meadow,
+                    cost: 6,
+                    nicheDescription: "苔藓/蕨类萌发+50% · 吸引西瓜虫 · 萤火虫信标",
+                    unlocked: false,
+                    enabled: false
+                ),
+                DecorItem(
+                    id: "shallow_pool",
+                    name: "溪石浅水洼",
+                    assetName: "env_shallow_pool",
+                    biome: .meadow,
+                    cost: 10,
+                    nicheDescription: "被动保湿 -20% 蒸发 · 绿豆树蛙定居必需",
+                    unlocked: false,
+                    enabled: false
+                ),
+                DecorItem(
+                    id: "boulder",
+                    name: "覆苔阴凉青石",
+                    assetName: "env_boulder",
+                    biome: .meadow,
+                    cost: 12,
+                    nicheDescription: "局部降温 -1°C · 助推微光菇与月光飞蛾",
+                    unlocked: false,
+                    enabled: false
+                )
+            ]
+        case .sand:
+            return [
+                DecorItem(
+                    id: "sand_pebbles",
+                    name: "暖阳卵石滩",
+                    assetName: "env_pebbles",
+                    biome: .sand,
+                    cost: 6,
+                    nicheDescription: "可行走晒背点 · 琥珀甲虫定居必需",
+                    unlocked: false,
+                    enabled: false
+                ),
+                DecorItem(
+                    id: "sand_rock",
+                    name: "风蚀红砂岩",
+                    assetName: "env_sand_rock",
+                    biome: .sand,
+                    cost: 10,
+                    nicheDescription: "昼夜庇护所 · 豹纹沙守宫定居必需",
+                    unlocked: false,
+                    enabled: false
+                ),
+                DecorItem(
+                    id: "sand_wood",
+                    name: "白化沙木枝",
+                    assetName: "env_sand_wood",
+                    biome: .sand,
+                    cost: 12,
+                    nicheDescription: "荒漠植物萌发+50% · 助推芦荟与仙人球",
+                    unlocked: false,
+                    enabled: false
+                )
+            ]
+        case .rainforest:
+            return [
+                DecorItem(
+                    id: "rainforest_vine",
+                    name: "热带藤蔓攀爬架",
+                    assetName: "env_rainforest_vine",
+                    biome: .rainforest,
+                    cost: 10,
+                    nicheDescription: "变色龙必配栖架 · 雨林植物萌发+50%",
+                    unlocked: false,
+                    enabled: false
+                ),
+                DecorItem(
+                    id: "rainforest_waterfall",
+                    name: "雾化小瀑布石",
+                    assetName: "env_rainforest_waterfall",
+                    biome: .rainforest,
+                    cost: 14,
+                    nicheDescription: "流动瀑布 · 被动保湿 -25% 蒸发",
+                    unlocked: false,
+                    enabled: false
+                ),
+                DecorItem(
+                    id: "rainforest_bark",
+                    name: "雨林朽木树洞",
+                    assetName: "env_rainforest_bark",
+                    biome: .rainforest,
+                    cost: 9,
+                    nicheDescription: "枯叶脩与长戟大兜虫必配隐蔽所",
+                    unlocked: false,
+                    enabled: false
+                )
+            ]
+        case .aquatic:
+            return [
+                DecorItem(
+                    id: "aquatic_bubble_rock",
+                    name: "冒泡火山石",
+                    assetName: "env_aquatic_bubble_rock",
+                    biome: .aquatic,
+                    cost: 14,
+                    nicheDescription: "持续冒泡充氧 · 被动稳住溶氧 -30% 衰减",
+                    unlocked: false,
+                    enabled: false
+                ),
+                DecorItem(
+                    id: "aquatic_driftwood",
+                    name: "沉木水草石",
+                    assetName: "env_aquatic_driftwood",
+                    biome: .aquatic,
+                    cost: 10,
+                    nicheDescription: "附着小水榕 · 水草萌发速度 +50%",
+                    unlocked: false,
+                    enabled: false
+                ),
+                DecorItem(
+                    id: "aquatic_castle",
+                    name: "陶瓷躲避屋",
+                    assetName: "env_aquatic_castle",
+                    biome: .aquatic,
+                    cost: 9,
+                    nicheDescription: "虾蟹脱壳藏身洞 · 米虾与蓝螯虾必需",
+                    unlocked: false,
+                    enabled: false
+                )
+            ]
+        }
+    }
+
+    // MARK: - 全局生态图鉴（共 29 项）
+    public static func defaultCodexEntries() -> [CodexEntry] {
+        [
+            // 苔原缸植物
+            CodexEntry(id: "moss", name: "绒球苔藓", biome: .meadow, category: "植物", condition: "苔原湿润(≥45%)", desc: "第一抹绿色生机，高湿时叶尖凝结露珠。", unlocked: false),
+            CodexEntry(id: "clover", name: "幸运三叶草", biome: .meadow, category: "植物", condition: "苔藓≥1 + 湿度≥68%", desc: "圆润翠绿的贴地草丛，常吸引夜虫停栖。", unlocked: false),
+            CodexEntry(id: "fern", name: "卷叶蕨", biome: .meadow, category: "植物", condition: "苔藓≥2 + 湿度≥62%", desc: "优雅的羽状林冠植物，为树蛙提供阴凉。", unlocked: false),
+            CodexEntry(id: "glow_shroom", name: "微光菇", biome: .meadow, category: "稀有植物", condition: "阴凉(≤19°C) + 高湿(≥75%)", desc: "散发冷青柔光的珍稀菌类，是月光飞蛾的最爱。", unlocked: false),
+            // 苔原缸动物
+            CodexEntry(id: "snail", name: "露珠蜗牛", biome: .meadow, category: "动物", condition: "苔藓≥1 + 湿润(≥45%)", desc: "温和的慢行小软体动物，不可与树蛙同缸。", unlocked: false),
+            CodexEntry(id: "pill_bug", name: "迷你西瓜虫", biome: .meadow, category: "动物", condition: "腐殖沉木 + 苔藓≥1", desc: "圆滚滚的小小分解者，轻触连点会缩成小球。", unlocked: false),
+            CodexEntry(id: "rhino_beetle", name: "栗壳独角仙", biome: .meadow, category: "动物", condition: "腐殖沉木 + 卷叶蕨≥1 + 湿度≥55%", desc: "顶着优雅 Y 型大角的温顺大型甲虫，喜栖沉木旁。", unlocked: false),
+            CodexEntry(id: "tree_frog", name: "绿豆树蛙", biome: .meadow, category: "动物", condition: "溪石浅水洼 + 卷叶蕨≥1 + 湿度≥55%", desc: "鼓着高凸大眼的林间捕食者，需独立单养不可混放虫螺。", unlocked: false),
+            CodexEntry(id: "firefly", name: "微光萤火虫", biome: .meadow, category: "稀有动物", condition: "腐殖沉木 + 幸运草/蕨 + 夜/雨高湿", desc: "伴随夜风在草叶上空翩翩起舞的微光。", unlocked: false),
+            CodexEntry(id: "moon_moth", name: "月光小飞蛾", biome: .meadow, category: "专属高阶", condition: "微光菇≥1 + 夜晚 + 高湿(≥72%)", desc: "仅被发光蘑菇吸引入驻的梦幻夜行精灵。", unlocked: false),
+            // 沙地缸植物 & 动物
+            CodexEntry(id: "succulent", name: "莲座多肉", biome: .sand, category: "沙地植物", condition: "沙地缸(湿度≤55%)", desc: "饱满耐旱的沙漠莲座，在暖阳下独自绽放。", unlocked: false),
+            CodexEntry(id: "aloe", name: "星点芦荟", biome: .sand, category: "沙地植物", condition: "多肉≥1 + 湿度28~55%", desc: "厚实多汁的荒漠植物，叶缘带着淡淡星斑。", unlocked: false),
+            CodexEntry(id: "cactus", name: "金琥仙人球", biome: .sand, category: "稀有植物", condition: "多肉≥1 + 温暖(≥25°C) + 干燥(≤50%)", desc: "圆润金刺仙人球，高成熟度会开出明黄小花。", unlocked: false),
+            CodexEntry(id: "amber_beetle", name: "琥珀甲虫", biome: .sand, category: "沙地动物", condition: "暖阳卵石滩 + 多肉≥1", desc: "喜欢在暖阳卵石旁活动、爬去食盆的小甲虫。", unlocked: false),
+            CodexEntry(id: "sand_gecko", name: "豹纹沙守宫", biome: .sand, category: "沙地动物", condition: "风蚀红砂岩 + 沙地植物≥2 + ≥24°C", desc: "拖着斑点小尾巴在沙地上慢跑的萌宠守宫。", unlocked: false),
+            CodexEntry(id: "scarab", name: "琉璃圣甲虫", biome: .sand, category: "专属高阶", condition: "仙人球≥1 + 芦荟≥1 + 暖干(≥27°C, ≤42%)", desc: "只在仙人球与芦荟共存的暖阳荒漠中现身的宝石甲虫。", unlocked: false),
+            // 雨林缸植物 & 动物
+            CodexEntry(id: "monstera", name: "龟背竹", biome: .rainforest, category: "雨林植物", condition: "热带雨林缸 + 湿度≥60%", desc: "标志性裂孔阔叶植物，是变色龙最喜欢的翠绿伪装屏障。", unlocked: false),
+            CodexEntry(id: "bromeliad", name: "积水凤梨", biome: .rainforest, category: "雨林植物", condition: "龟背竹≥1 + 湿度≥72%", desc: "中心叶杯常蓄积甘露的艳红热带凤梨。", unlocked: false),
+            CodexEntry(id: "orchid", name: "热带兰花", biome: .rainforest, category: "稀有植物", condition: "龟背竹≥1 + 温暖(≥24°C) + 湿度≥75%", desc: "幽香娇艳的紫金树冠兰花，吸引大兜虫栖息。", unlocked: false),
+            CodexEntry(id: "leaf_insect", name: "枯叶拟态脩", biome: .rainforest, category: "雨林动物", condition: "朽木树洞 + 龟背竹≥1 + 湿度≥65%", desc: "脉络如真实叶片般精致，轻碰会随风轻晃。", unlocked: false),
+            CodexEntry(id: "hercules_beetle", name: "长戟大兜虫", biome: .rainforest, category: "雨林动物", condition: "朽木树洞 + 热带兰花≥1 + ≥24°C", desc: "身披金甲、拥有标志性前后长戟大角的力量之王。", unlocked: false),
+            CodexEntry(id: "chameleon", name: "七彩高冠变色龙", biome: .rainforest, category: "专属高阶", condition: "藤蔓架 + 雨林植被≥2 + ≥25°C + 湿度≥70%", desc: "会根据所处植物与藤蔓色彩实时拟态变色的雨林明星！", unlocked: false),
+            // 碧波鱼缸植物 & 动物
+            CodexEntry(id: "marimo", name: "莫斯藻球", biome: .aquatic, category: "水草", condition: "碧波鱼缸 + 溶氧≥55%", desc: "毛茸茸的圆球水藻，水底米虾的最爱。", unlocked: false),
+            CodexEntry(id: "anubias", name: "皇冠水草", biome: .aquatic, category: "水草", condition: "莫斯藻球≥1 + 溶氧≥65%", desc: "苍翠阔叶水草，为红绿灯鱼提供穿行林影。", unlocked: false),
+            CodexEntry(id: "lotus", name: "迷你水睡莲", biome: .aquatic, category: "稀有水草", condition: "莫斯藻球≥1 + ≥23°C + 溶氧≥72%", desc: "在水面绽放粉嫩小花的精致浮水植物。", unlocked: false),
+            CodexEntry(id: "cherry_shrimp", name: "樱花米虾", biome: .aquatic, category: "水生生物", condition: "陶瓷躲避屋 + 莫斯藻球≥1", desc: "在河沙与藻球间忙碌拾藻、偶尔轻盈游水换草的通红小精灵。", unlocked: false),
+            CodexEntry(id: "neon_tetra", name: "红绿灯鱼群", biome: .aquatic, category: "水生生物", condition: "皇冠水草≥1 + 溶氧≥65%", desc: "体侧闪烁着电光蓝与霓虹红、成群结队在中层游曳的观赏鱼。", unlocked: false),
+            CodexEntry(id: "betta_fish", name: "半月斗鱼", biome: .aquatic, category: "专属高阶", condition: "水睡莲≥1 + 水温≥24°C + 溶氧≥72%", desc: "性格好斗需单独分缸，拖曳蓝红半月大尾鳍在睡莲下优雅巡游。", unlocked: false),
+            CodexEntry(id: "crayfish", name: "天空蓝螯虾", biome: .aquatic, category: "水底霸主", condition: "冒泡火山石 + 躲避屋 + 水草≥1", desc: "威风凛凛的蓝甲螯虾，不可与小鱼、米虾或斗鱼混养。", unlocked: false)
+        ]
+    }
+
+    // MARK: - 生物个性、昵称与生态位停驻坐标
+    public static func defaultNickname(for kind: CritterKind) -> String {
+        switch kind {
+        case .snail: return "蜗宝"
+        case .pillBug: return "小团子"
+        case .rhinoBeetle: return "独角侠"
+        case .treeFrog: return "青瓜"
+        case .amberBeetle: return "小琥珀"
+        case .sandGecko: return "小橘"
+        case .scarab: return "琉璃星"
+        case .leafInsect: return "青叶"
+        case .herculesBeetle: return "大力神"
+        case .chameleon: return "小七彩"
+        case .cherryShrimp: return "小红虾"
+        case .neonTetra: return "霓虹豆"
+        case .bettaFish: return "蓝绸"
+        case .crayfish: return "蓝钳将"
+        }
+    }
+
+    public static func defaultPersonality(for kind: CritterKind) -> String {
+        switch kind {
+        case .snail: return "慢性子"
+        case .pillBug: return "害羞团"
+        case .rhinoBeetle: return "护木侠"
+        case .treeFrog: return "爱戏水"
+        case .amberBeetle: return "晒太阳"
+        case .sandGecko: return "好奇眼"
+        case .scarab: return "守沙者"
+        case .leafInsect: return "静如叶"
+        case .herculesBeetle: return "角力士"
+        case .chameleon: return "变色魔术师"
+        case .cherryShrimp: return "勤劳钳"
+        case .neonTetra: return "追光手"
+        case .bettaFish: return "优雅尾"
+        case .crayfish: return "缸霸"
+        }
+    }
+
+    /// 优先停驻的专属生态位摆件近旁坐标（随摆件实际摆放原点动态跟随）
+    public static func nicheSpot(for kind: CritterKind, enabledDecorIDs: [String], decorOrigins: [String: GridCoord] = [:]) -> GridCoord? {
+        switch kind {
+        case .treeFrog:
+            guard enabledDecorIDs.contains("shallow_pool") else { return nil }
+            return effectiveDecorOrigin(for: "shallow_pool", decorOrigins: decorOrigins)
+        case .snail, .pillBug, .rhinoBeetle:
+            guard enabledDecorIDs.contains("driftwood") else { return nil }
+            let o = effectiveDecorOrigin(for: "driftwood", decorOrigins: decorOrigins)
+            return GridCoord(col: o.col + 1, row: max(0, o.row - 1))
+        case .amberBeetle:
+            guard enabledDecorIDs.contains("sand_pebbles") else { return nil }
+            return effectiveDecorOrigin(for: "sand_pebbles", decorOrigins: decorOrigins)
+        case .sandGecko:
+            guard enabledDecorIDs.contains("sand_rock") else { return nil }
+            let o = effectiveDecorOrigin(for: "sand_rock", decorOrigins: decorOrigins)
+            return GridCoord(col: o.col, row: min(gridRows - 1, o.row + 2))
+        case .scarab:
+            guard enabledDecorIDs.contains("sand_wood") else { return nil }
+            let o = effectiveDecorOrigin(for: "sand_wood", decorOrigins: decorOrigins)
+            return GridCoord(col: o.col + 1, row: min(gridRows - 1, o.row + 2))
+        case .leafInsect, .herculesBeetle:
+            guard enabledDecorIDs.contains("rainforest_bark") else { return nil }
+            let o = effectiveDecorOrigin(for: "rainforest_bark", decorOrigins: decorOrigins)
+            return GridCoord(col: o.col + 1, row: max(0, o.row - 1))
+        case .chameleon:
+            guard enabledDecorIDs.contains("rainforest_vine") else { return nil }
+            let o = effectiveDecorOrigin(for: "rainforest_vine", decorOrigins: decorOrigins)
+            return GridCoord(col: o.col + 1, row: min(gridRows - 1, o.row + 2))
+        case .cherryShrimp, .crayfish:
+            guard enabledDecorIDs.contains("aquatic_castle") else { return nil }
+            let o = effectiveDecorOrigin(for: "aquatic_castle", decorOrigins: decorOrigins)
+            return GridCoord(col: o.col + 1, row: max(0, o.row - 1))
+        case .neonTetra, .bettaFish:
+            guard enabledDecorIDs.contains("aquatic_bubble_rock") else { return nil }
+            let o = effectiveDecorOrigin(for: "aquatic_bubble_rock", decorOrigins: decorOrigins)
+            return GridCoord(col: max(0, o.col - 1), row: o.row + 1)
+        }
+    }
+}

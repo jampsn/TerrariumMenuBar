@@ -1,0 +1,23 @@
+# Swift Package Manager & Xcode build artifacts
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+
+# macOS app bundle & debug symbols
+*.app/
+*.dSYM/
+*.dSYM.zip
+*.ipa
+
+# OS & Editor temporary files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
