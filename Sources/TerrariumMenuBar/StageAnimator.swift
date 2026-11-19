@@ -62,11 +62,42 @@ struct PixelParticle: Identifiable {
     }
 }
 
+enum AerialVisitorKind: String, CaseIterable {
+    case firefly
+    case moonMoth = "moon_moth"
+    case dragonfly
+    case lunaCicada = "luna_cicada"
+}
+
+enum AerialVisitorPhase {
+    case cruising
+    case perching
+    case fleeing
+}
+
+struct AerialVisitorRuntime: Identifiable {
+    var id: String { kind.rawValue }
+    let kind: AerialVisitorKind
+    var isVisiting: Bool
+    var gx: Double
+    var gy: Double
+    var gz: Double
+    var targetGX: Double
+    var targetGY: Double
+    var targetGZ: Double
+    var facingRight: Bool = true
+    var phase: AerialVisitorPhase = .cruising
+    var phaseTicks: Int = 0
+    var targetDuration: Int = 60
+    var predatorCooldownTicks: Int = 0
+}
+
 /// 独立 15fps 舞台动画与 A* 精准食盆寻路引擎
 @MainActor
 final class StageAnimator: ObservableObject {
     @Published private(set) var tick: Int = 0
     @Published private(set) var critterRuntimes: [CritterRuntime] = []
+    @Published private(set) var aerialVisitors: [AerialVisitorRuntime] = []
     @Published private(set) var particles: [PixelParticle] = []
 
     private let maxParticles = 56
@@ -338,6 +369,7 @@ final class StageAnimator: ObservableObject {
                 stepCritter(index: idx, state: state, blocked: blocked)
             }
         }
+        stepAerialVisitors(state: state)
         for idx in critterRuntimes.indices where !critterRuntimes[idx].isLeader {
             stepCompanionCritter(index: idx, state: state, blocked: blocked)
         }
@@ -1129,5 +1161,205 @@ final class StageAnimator: ObservableObject {
             }
         }
         particles.append(particle)
+    }
+
+    // MARK: - 空中访客（多角度巡航、停落栖息、水域水面之上与天敌俏皮扑空互动）
+
+    private func stepAerialVisitors(state: TerrariumState) {
+        let unlocked = Set(state.unlockedCodexIDs)
+        let isAquatic = (state.currentBiome == .aquatic)
+        let visitWindow = state.isResonanceActive && !state.isSleeping && ((tick % 900) < 320)
+
+        var desired: [(kind: AerialVisitorKind, isVisiting: Bool)] = []
+
+        // 1. 碧蓝蜻蜓（苔原/水域原生，或共鸣时在日间/暖阳串门至其他缸；水域严格在水面之上）
+        if TerrariumConfig.isDragonflyCondition(biome: state.currentBiome, atmosphere: state.atmosphere, humidity: state.humidity, plants: state.plants, enabledDecorIDs: state.enabledDecorIDs) {
+            desired.append((.dragonfly, false))
+        } else if visitWindow && state.atmosphere != .night && unlocked.contains("dragonfly") {
+            desired.append((.dragonfly, true))
+        }
+
+        // 2. 萤火虫 / 月光飞蛾 / 翠光夏蝉：严禁进入鱼缸水体，仅在陆缸原生或跨陆缸串门
+        if !isAquatic {
+            if TerrariumConfig.isFireflyCondition(biome: state.currentBiome, atmosphere: state.atmosphere, humidity: state.humidity, plants: state.plants, enabledDecorIDs: state.enabledDecorIDs) {
+                desired.append((.firefly, false))
+            } else if visitWindow && state.atmosphere == .night && unlocked.contains("firefly") {
+                desired.append((.firefly, true))
+            }
+
+            if TerrariumConfig.isMoonMothCondition(biome: state.currentBiome, atmosphere: state.atmosphere, humidity: state.humidity, plants: state.plants) {
+                desired.append((.moonMoth, false))
+            } else if visitWindow && state.atmosphere == .night && unlocked.contains("moon_moth") {
+                desired.append((.moonMoth, true))
+            }
+
+            if TerrariumConfig.isLunaCicadaCondition(biome: state.currentBiome, atmosphere: state.atmosphere, temperature: state.temperature, plants: state.plants, enabledDecorIDs: state.enabledDecorIDs) {
+                desired.append((.lunaCicada, false))
+            } else if visitWindow && (state.atmosphere == .night || state.atmosphere == .warm) && unlocked.contains("luna_cicada") {
+                desired.append((.lunaCicada, true))
+            }
+        }
+
+        let minGZ: Double = isAquatic ? 43.0 : 18.0
+        let maxGZ: Double = isAquatic ? 54.0 : 34.0
+
+        var updated: [AerialVisitorRuntime] = []
+        for item in desired {
+            if var existing = aerialVisitors.first(where: { $0.kind == item.kind }) {
+                existing.isVisiting = item.isVisiting
+                if isAquatic && existing.gz < 39.0 {
+                    existing.gz = 46.0
+                }
+                updated.append(existing)
+            } else {
+                let startGX = Double.random(in: 2.5...8.5)
+                let startGY = Double.random(in: 2.5...8.5)
+                let startGZ = Double.random(in: minGZ...maxGZ)
+                updated.append(AerialVisitorRuntime(
+                    kind: item.kind,
+                    isVisiting: item.isVisiting,
+                    gx: startGX,
+                    gy: startGY,
+                    gz: startGZ,
+                    targetGX: Double.random(in: 2.0...9.0),
+                    targetGY: Double.random(in: 2.0...9.0),
+                    targetGZ: Double.random(in: minGZ...maxGZ),
+                    targetDuration: Int.random(in: 45...85)
+                ))
+            }
+        }
+
+        let predators: Set<CritterKind> = [.treeFrog, .dartFrog, .redEyedFrog, .sandGecko, .hornedToad, .chameleon, .desertMantis]
+
+        for idx in updated.indices {
+            var v = updated[idx]
+            v.phaseTicks += 1
+            if v.predatorCooldownTicks > 0 { v.predatorCooldownTicks -= 1 }
+
+            switch v.phase {
+            case .cruising:
+                let oldScreen = TerrariumConfig.isoToScreen(gx: v.gx, gy: v.gy, gz: v.gz)
+                let dx = v.targetGX - v.gx
+                let dy = v.targetGY - v.gy
+                let dz = v.targetGZ - v.gz
+                let dist = sqrt(dx * dx + dy * dy + dz * dz * 0.04)
+
+                let speed = (v.kind == .dragonfly) ? 0.085 : 0.055
+                if dist > 0.25 {
+                    v.gx += (dx / max(0.3, dist)) * speed
+                    v.gy += (dy / max(0.3, dist)) * speed
+                    v.gz += (dz * 0.08)
+                }
+                let wobbleZ = sin(Double(tick + idx * 17) * 0.16) * 0.22
+                v.gz = max(minGZ - 2.0, min(maxGZ + 2.0, v.gz + wobbleZ))
+
+                let newScreen = TerrariumConfig.isoToScreen(gx: v.gx, gy: v.gy, gz: v.gz)
+                if abs(newScreen.x - oldScreen.x) > 0.02 {
+                    v.facingRight = newScreen.x >= oldScreen.x
+                }
+
+                if dist <= 0.35 || v.phaseTicks >= v.targetDuration {
+                    if Double.random(in: 0...1) < 0.45, let perch = pickAerialPerchSpot(state: state, isAquatic: isAquatic) {
+                        v.targetGX = perch.gx
+                        v.targetGY = perch.gy
+                        v.targetGZ = perch.gz
+                        v.phase = .perching
+                        v.phaseTicks = 0
+                        v.targetDuration = Int.random(in: 50...85)
+                    } else {
+                        v.targetGX = Double.random(in: 2.0...9.0)
+                        v.targetGY = Double.random(in: 2.0...9.0)
+                        v.targetGZ = Double.random(in: minGZ...maxGZ)
+                        v.phaseTicks = 0
+                        v.targetDuration = Int.random(in: 45...85)
+                    }
+                }
+
+            case .perching:
+                let oldScreen = TerrariumConfig.isoToScreen(gx: v.gx, gy: v.gy, gz: v.gz)
+                v.gx += (v.targetGX - v.gx) * 0.14
+                v.gy += (v.targetGY - v.gy) * 0.14
+                v.gz += (v.targetGZ - v.gz) * 0.14
+                let newScreen = TerrariumConfig.isoToScreen(gx: v.gx, gy: v.gy, gz: v.gz)
+                if abs(newScreen.x - oldScreen.x) > 0.02 {
+                    v.facingRight = newScreen.x >= oldScreen.x
+                }
+
+                // 治愈系天敌扑空小剧场：当落脚点附近有天敌时，天敌尝试扑咬，昆虫受惊急升飞高（绝不真吃掉）
+                let arrivedAtPerch = hypot(v.gx - v.targetGX, v.gy - v.targetGY) < 0.35 && abs(v.gz - v.targetGZ) < 2.5
+                if !isAquatic && arrivedAtPerch && v.predatorCooldownTicks == 0 {
+                    if let cIdx = critterRuntimes.firstIndex(where: {
+                        $0.isLeader && predators.contains($0.kind) && ($0.behavior == .idle || $0.behavior == .patrol)
+                            && hypot($0.gx - v.gx, $0.gy - v.gy) <= 2.5
+                    }) {
+                        let cPos = TerrariumConfig.isoToScreen(gx: critterRuntimes[cIdx].gx, gy: critterRuntimes[cIdx].gy, gz: critterRuntimes[cIdx].gz)
+                        let vPos = TerrariumConfig.isoToScreen(gx: v.gx, gy: v.gy, gz: v.gz)
+                        critterRuntimes[cIdx].facingRight = (vPos.x >= cPos.x)
+                        critterRuntimes[cIdx].behavior = .petted
+                        critterRuntimes[cIdx].stateTicks = 0
+                        let huntCall = (critterRuntimes[cIdx].kind == .desertMantis) ? "挥镰!" : "吐舌!"
+                        appendParticle(PixelParticle(x: cPos.x, y: cPos.y - 14, vx: 0, vy: -0.4, kind: .popup, life: 22, text: huntCall))
+                        appendParticle(PixelParticle(x: vPos.x, y: vPos.y - 10, vx: 0, vy: -0.5, kind: .popup, life: 22, text: "溜了!"))
+
+                        v.phase = .fleeing
+                        v.phaseTicks = 0
+                        v.targetDuration = 26
+                        v.predatorCooldownTicks = 180
+                        v.targetGX = Double.random(in: 2.0...9.0)
+                        v.targetGY = Double.random(in: 2.0...9.0)
+                        v.targetGZ = maxGZ + 3.0
+                    }
+                }
+
+                if v.phase == .perching && v.phaseTicks >= v.targetDuration {
+                    v.phase = .cruising
+                    v.phaseTicks = 0
+                    v.targetGX = Double.random(in: 2.0...9.0)
+                    v.targetGY = Double.random(in: 2.0...9.0)
+                    v.targetGZ = Double.random(in: minGZ...maxGZ)
+                    v.targetDuration = Int.random(in: 45...80)
+                }
+
+            case .fleeing:
+                let oldScreen = TerrariumConfig.isoToScreen(gx: v.gx, gy: v.gy, gz: v.gz)
+                v.gx += (v.targetGX - v.gx) * 0.14
+                v.gy += (v.targetGY - v.gy) * 0.14
+                v.gz += (v.targetGZ - v.gz) * 0.20
+                let newScreen = TerrariumConfig.isoToScreen(gx: v.gx, gy: v.gy, gz: v.gz)
+                if abs(newScreen.x - oldScreen.x) > 0.02 {
+                    v.facingRight = newScreen.x >= oldScreen.x
+                }
+                if v.phaseTicks >= v.targetDuration {
+                    v.phase = .cruising
+                    v.phaseTicks = 0
+                    v.targetDuration = Int.random(in: 45...80)
+                }
+            }
+
+            updated[idx] = v
+        }
+
+        aerialVisitors = updated
+    }
+
+    private func pickAerialPerchSpot(state: TerrariumState, isAquatic: Bool) -> (gx: Double, gy: Double, gz: Double)? {
+        if isAquatic {
+            let lotuses = state.plants.filter { $0.speciesID == "lotus" && $0.stage != .withered }
+            if let pick = lotuses.randomElement() {
+                return (Double(pick.coord.col) + 0.5, Double(pick.coord.row) + 0.5, 39.5)
+            }
+            return nil
+        }
+
+        let healthyPlants = state.plants.filter { $0.stage != .withered }
+        if let plant = healthyPlants.randomElement() {
+            let topGZ: Double = (plant.stage == .sprout) ? 5.5 : 10.5
+            return (Double(plant.coord.col) + 0.5, Double(plant.coord.row) + 0.5, topGZ)
+        }
+        if let decorID = state.enabledDecorIDs.randomElement() {
+            let p = TerrariumConfig.anchorGridPos(for: decorID, decorOrigins: state.decorOrigins)
+            return (p.gx, p.gy, 8.5)
+        }
+        return nil
     }
 }

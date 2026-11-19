@@ -672,56 +672,41 @@ struct PixelStageView: View {
                 item.draw(&context)
             }
 
-            // ==================== Pass 5: 空中专属生物（原生 + 多缸共鸣串门）与 VFX 粒子 ====================
-            let unlockedSet = Set(state.unlockedCodexIDs)
-            let visitWindow = state.isResonanceActive && !state.isSleeping && ((animator.tick % 900) < 240)
-
-            let nativeFirefly = TerrariumConfig.isFireflyCondition(biome: state.currentBiome, atmosphere: state.atmosphere, humidity: state.humidity, plants: state.plants, enabledDecorIDs: state.enabledDecorIDs)
-            let visitingFirefly = !nativeFirefly && visitWindow && state.atmosphere == .night && unlockedSet.contains("firefly")
-            if nativeFirefly || visitingFirefly {
-                let flyGX = 5.5 + sin(Double(animator.tick) * 0.08) * 2.8
-                let flyGY = 5.0 + cos(Double(animator.tick) * 0.11) * 2.4
-                let flyGZ = 24.0 + sin(Double(animator.tick) * 0.16) * 4.0
-                let flyPos = TerrariumConfig.isoToScreen(gx: flyGX, gy: flyGY, gz: flyGZ)
-                let flyFrame = state.isSleeping ? 7 : ((animator.tick / 2) % 4)
-                context.opacity = visitingFirefly ? 0.72 : 1.0
-                drawSheetFrame(in: &context, sheet: "char_firefly_sheet", frameIndex: flyFrame, frameSize: CGSize(width: 12, height: 12), screenPos: flyPos, anchor: CGPoint(x: 6, y: 6))
-                context.opacity = 1.0
+            // ==================== Pass 5: 陆缸空中专属生物（多向巡航、停落栖息与串门）与 VFX 粒子 ====================
+            func drawAerialVisitor(_ v: AerialVisitorRuntime, isSleeping: Bool, tick: Int, in ctx: inout GraphicsContext) {
+                let pos = TerrariumConfig.isoToScreen(gx: v.gx, gy: v.gy, gz: v.gz)
+                let frameIdx: Int = {
+                    if isSleeping { return (v.kind == .firefly) ? 7 : 6 }
+                    switch v.phase {
+                    case .perching:
+                        return 6 + ((tick / 10) % 2)
+                    case .fleeing:
+                        return tick % 4
+                    case .cruising:
+                        let speedDiv = (v.kind == .dragonfly || v.kind == .firefly) ? 2 : 3
+                        return (tick / speedDiv) % 4
+                    }
+                }()
+                ctx.opacity = v.isVisiting ? 0.78 : 1.0
+                switch v.kind {
+                case .firefly:
+                    drawSheetFrame(in: &ctx, sheet: "char_firefly_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 12, height: 12), screenPos: pos, anchor: CGPoint(x: 6, y: 6), flippedX: !v.facingRight)
+                case .moonMoth:
+                    drawSheetFrame(in: &ctx, sheet: "char_moth_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 16, height: 14), screenPos: pos, anchor: CGPoint(x: 8, y: 7), flippedX: !v.facingRight)
+                case .dragonfly:
+                    drawSheetFrame(in: &ctx, sheet: "char_dragonfly_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 18, height: 14), screenPos: pos, anchor: CGPoint(x: 9, y: 7), flippedX: !v.facingRight)
+                case .lunaCicada:
+                    drawSheetFrame(in: &ctx, sheet: "char_luna_cicada_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 16, height: 14), screenPos: pos, anchor: CGPoint(x: 8, y: 7), flippedX: !v.facingRight)
+                }
+                ctx.opacity = 1.0
             }
 
-            let nativeMoth = TerrariumConfig.isMoonMothCondition(biome: state.currentBiome, atmosphere: state.atmosphere, humidity: state.humidity, plants: state.plants)
-            let visitingMoth = !nativeMoth && visitWindow && state.atmosphere == .night && unlockedSet.contains("moon_moth")
-            if nativeMoth || visitingMoth {
-                let mothGX = 4.5 + cos(Double(animator.tick) * 0.07) * 2.6
-                let mothGY = 4.2 + sin(Double(animator.tick) * 0.09) * 2.2
-                let mothGZ = 28.0 + cos(Double(animator.tick) * 0.14) * 3.5
-                let mothPos = TerrariumConfig.isoToScreen(gx: mothGX, gy: mothGY, gz: mothGZ)
-                let mothFrame = state.isSleeping ? 6 : ((animator.tick / 3) % 4)
-                context.opacity = visitingMoth ? 0.72 : 1.0
-                drawSheetFrame(in: &context, sheet: "char_moth_sheet", frameIndex: mothFrame, frameSize: CGSize(width: 16, height: 14), screenPos: mothPos, anchor: CGPoint(x: 8, y: 7))
-                context.opacity = 1.0
-            }
-
-            let nativeDragonfly = TerrariumConfig.isDragonflyCondition(biome: state.currentBiome, atmosphere: state.atmosphere, humidity: state.humidity, plants: state.plants, enabledDecorIDs: state.enabledDecorIDs)
-            let visitingDragonfly = !nativeDragonfly && visitWindow && state.atmosphere != .night && unlockedSet.contains("dragonfly")
-            if nativeDragonfly || visitingDragonfly {
-                let dfGX = 5.0 + sin(Double(animator.tick) * 0.11) * 3.0
-                let dfGY = 4.8 + cos(Double(animator.tick) * 0.09) * 2.5
-                let dfGZ = 30.0 + sin(Double(animator.tick) * 0.18) * 3.0
-                let dfPos = TerrariumConfig.isoToScreen(gx: dfGX, gy: dfGY, gz: dfGZ)
-                let dfFrame = state.isSleeping ? 6 : ((animator.tick / 2) % 4)
-                context.opacity = visitingDragonfly ? 0.72 : 1.0
-                drawSheetFrame(in: &context, sheet: "char_dragonfly_sheet", frameIndex: dfFrame, frameSize: CGSize(width: 18, height: 14), screenPos: dfPos, anchor: CGPoint(x: 9, y: 7))
-                context.opacity = 1.0
-            }
-
-            if TerrariumConfig.isLunaCicadaCondition(biome: state.currentBiome, atmosphere: state.atmosphere, temperature: state.temperature, plants: state.plants, enabledDecorIDs: state.enabledDecorIDs) {
-                let lcGX = 4.8 + cos(Double(animator.tick) * 0.06) * 2.4
-                let lcGY = 5.2 + sin(Double(animator.tick) * 0.08) * 2.0
-                let lcGZ = 27.0 + cos(Double(animator.tick) * 0.12) * 3.2
-                let lcPos = TerrariumConfig.isoToScreen(gx: lcGX, gy: lcGY, gz: lcGZ)
-                let lcFrame = state.isSleeping ? 6 : ((animator.tick / 3) % 4)
-                drawSheetFrame(in: &context, sheet: "char_luna_cicada_sheet", frameIndex: lcFrame, frameSize: CGSize(width: 16, height: 14), screenPos: lcPos, anchor: CGPoint(x: 8, y: 7))
+            if state.currentBiome != .aquatic {
+                let sleepingNow = state.isSleeping
+                let tickNow = animator.tick
+                for v in animator.aerialVisitors {
+                    drawAerialVisitor(v, isSleeping: sleepingNow, tick: tickNow, in: &context)
+                }
             }
 
             // 食盆存在食物时的微弱香气提示粒子（陆生缸使用；鱼缸改为水面喂食圈，不冒水底香气）
@@ -922,6 +907,13 @@ struct PixelStageView: View {
 
                 for item in surfaceSortables.sorted(by: { $0.sortDepth < $1.sortDepth }) {
                     item.draw(&context)
+                }
+
+                // 鱼缸仅允许蜻蜓在水面之上 (gz >= 39.5) 盘旋或停落于睡莲叶，绝不在水下飞行
+                let sleepingNow = state.isSleeping
+                let tickNow = animator.tick
+                for v in animator.aerialVisitors where v.kind == .dragonfly {
+                    drawAerialVisitor(v, isSleeping: sleepingNow, tick: tickNow, in: &context)
                 }
             }
 
