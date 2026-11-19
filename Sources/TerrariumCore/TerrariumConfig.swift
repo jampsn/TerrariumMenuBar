@@ -172,7 +172,7 @@ public enum TerrariumConfig {
     public static let weatherEventDurationSeconds: TimeInterval = 900.0
 
     public static let codexUnlockBonusPoints: Int = 3
-    public static let maxTankSlots: Int = 8
+    public static let maxTankSlots: Int = 9
     public static let sandBiomeUnlockCost: Int = 35
     public static let heatLampCost: Int = 8
     public static let coolingFanCost: Int = 8
