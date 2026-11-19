@@ -63,6 +63,10 @@ struct TerrariumMenuBarApp: App {
             "env_shallow_pool", "env_driftwood", "env_boulder", "env_pebbles", "env_sand_rock", "env_sand_wood", "env_food_bowl",
             "env_rainforest_vine", "env_rainforest_waterfall", "env_rainforest_bark",
             "env_aquatic_bubble_rock", "env_aquatic_driftwood", "env_aquatic_castle",
+            "env_meadow_mushroom_log", "env_meadow_stepping_stones",
+            "env_sand_cairn", "env_sand_rib_arch",
+            "env_rainforest_bromeliad_stump", "env_rainforest_slate_ledge",
+            "env_aquatic_seiryu_stone", "env_aquatic_bamboo_tube",
             "plant_fern_sheet", "plant_clover_sheet", "plant_moss_clump", "plant_glow_shroom_sheet", "plant_red_shroom_sheet",
             "plant_succulent_sheet", "plant_cactus_sheet", "plant_aloe_sheet",
             "plant_monstera_sheet", "plant_bromeliad_sheet", "plant_orchid_sheet",
@@ -73,6 +77,7 @@ struct TerrariumMenuBarApp: App {
             "char_leaf_insect_sheet", "char_hercules_sheet",
             "char_chameleon_green", "char_chameleon_coral", "char_chameleon_bark", "char_chameleon_rainbow",
             "char_shrimp_sheet", "char_tetra_sheet", "char_betta_sheet", "char_crayfish_sheet",
+            "char_fire_newt_sheet", "char_sand_scorpion_sheet", "char_dart_frog_sheet", "char_corydoras_sheet",
             "icon_mist", "icon_feed", "icon_clean", "icon_sleep"
         ]
         var failed: [String] = []
@@ -87,7 +92,7 @@ struct TerrariumMenuBarApp: App {
             Foundation.exit(1)
         }
 
-        guard PixelAssetLoader.spriteSheetFrame(named: "env_shallow_pool", frameIndex: 1, frameSize: CGSize(width: 40, height: 22)) != nil,
+        guard PixelAssetLoader.spriteSheetFrame(named: "env_shallow_pool", frameIndex: 1, frameSize: CGSize(width: 44, height: 24)) != nil,
               PixelAssetLoader.spriteSheetFrame(named: "env_food_bowl", frameIndex: 2, frameSize: CGSize(width: 18, height: 12)) != nil,
               PixelAssetLoader.spriteSheetFrame(named: "env_pebbles", frameIndex: 1, frameSize: CGSize(width: 22, height: 12)) != nil,
               PixelAssetLoader.spriteSheetFrame(named: "plant_fern_sheet", frameIndex: 4, frameSize: CGSize(width: 32, height: 32)) != nil,
@@ -195,13 +200,23 @@ struct TerrariumMenuBarApp: App {
             Foundation.exit(1)
         }
 
-        // 3d. 验证夹缸加热灯付费购置（且连点 2 次不得瞬时跳变温度）+ 多实例购置热带雨林/碧波鱼缸 + 拆缸退点
+        // 3d. 验证夹缸加热灯付费购置（方案 A：购买与开关解耦，且连点 2 次不得瞬时跳变温度）+ 多实例购置热带雨林/碧波鱼缸 + 拆缸退点
         let tempBeforeHeat = state.temperature
+        state.toggleThermalMode(.heating) // 触发待确认购买
+        guard state.pendingPurchaseThermalMode == .heating, !state.hasHeatLamp else {
+            fputs("SELF_TEST_FAIL: Thermal heat lamp purchase confirmation prompt failed.\n", stderr)
+            Foundation.exit(1)
+        }
+        state.confirmPurchaseThermalEquipment()
+        guard state.hasHeatLamp, state.thermalMode == .natural else {
+            fputs("SELF_TEST_FAIL: Thermal heat lamp purchase install failed.\n", stderr)
+            Foundation.exit(1)
+        }
         state.toggleThermalMode(.heating)
         state.toggleThermalMode(.heating)
         state.toggleThermalMode(.heating)
         guard state.hasHeatLamp, state.thermalMode == .heating, state.temperature == tempBeforeHeat else {
-            fputs("SELF_TEST_FAIL: Thermal heat lamp purchase & anti-burst toggle failed.\n", stderr)
+            fputs("SELF_TEST_FAIL: Thermal heat lamp toggle & anti-burst failed.\n", stderr)
             Foundation.exit(1)
         }
         guard state.purchaseNewTank(biome: .rainforest, customName: "测试雨林"),

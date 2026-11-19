@@ -31,6 +31,10 @@ final class TerrariumState: ObservableObject {
     @Published var isShowingBuyTankSheet: Bool = false
     @Published var isShowingSettings: Bool = false
     @Published var isConfirmingResetSave: Bool = false
+    @Published var isConfirmingPrunePlant: Bool = false
+    @Published var pendingPurchaseThermalMode: ThermalMode? = nil
+    @Published var adminTimeScale: Double = 1.0
+    @Published var adminSimulatedElapsedSeconds: TimeInterval = 0
     @Published var isConfirmingDeleteTank: Bool = false
     @Published var atmosphere: SceneAtmosphere = .day
     @Published var temperature: Int = 22
@@ -65,6 +69,8 @@ final class TerrariumState: ObservableObject {
     private let persistence: TerrariumPersistence
     private var saveData: TerrariumSaveData
     nonisolated(unsafe) private var backgroundTimer: Timer?
+    nonisolated(unsafe) private var adminSpeedTimer: Timer?
+    private var adminVirtualNowOffset: TimeInterval = 0
     private var isSchedulerRunning: Bool = false
     private var lastWeatherFetchAt: Date = .distantPast
     private var hasSyncedInitialWeather: Bool = false
@@ -134,6 +140,16 @@ final class TerrariumState: ObservableObject {
                 nonisolated(unsafe) let t = activeTimer
                 DispatchQueue.main.async {
                     t.invalidate()
+                }
+            }
+        }
+        if let speedTimer = adminSpeedTimer {
+            if Thread.isMainThread {
+                speedTimer.invalidate()
+            } else {
+                nonisolated(unsafe) let st = speedTimer
+                DispatchQueue.main.async {
+                    st.invalidate()
                 }
             }
         }
@@ -266,10 +282,50 @@ final class TerrariumState: ObservableObject {
         isAdminMode = enabled
         if !enabled {
             showIsoGridDebug = false
+            setAdminTimeScale(1.0)
+            adminVirtualNowOffset = 0
+            adminSimulatedElapsedSeconds = 0
+            saveData.lastSavedAt = Date()
             bannerNotice = "已退出管理员模式，恢复自然演进"
         } else {
             bannerNotice = "已开启管理员模式（仅本次运行有效）"
         }
+    }
+
+    func setAdminTimeScale(_ scale: Double) {
+        guard isAdminMode || scale == 1.0 else { return }
+        adminTimeScale = scale
+        adminSpeedTimer?.invalidate()
+        adminSpeedTimer = nil
+        guard isAdminMode, scale > 1.0 else { return }
+
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.isAdminMode, self.adminTimeScale > 1.0 else { return }
+                let dt = self.adminTimeScale
+                self.adminVirtualNowOffset += dt
+                self.adminSimulatedElapsedSeconds += dt
+                let virtualNow = Date().addingTimeInterval(self.adminVirtualNowOffset)
+                self.processBackgroundTick(elapsed: dt, now: virtualNow, updateLastSavedAt: false)
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        adminSpeedTimer = timer
+        bannerNotice = "⏩ 管理员加速已设为 \(Int(scale))x（独立虚拟时钟，不污染真实存档时间）"
+    }
+
+    func fastForwardDebug(seconds: TimeInterval) {
+        guard isAdminMode, seconds > 0 else { return }
+        let beforePts = saveData.ecoPoints
+        let beforePlants = activeInstance.plants.count
+        adminVirtualNowOffset += seconds
+        adminSimulatedElapsedSeconds += seconds
+        let virtualNow = Date().addingTimeInterval(adminVirtualNowOffset)
+        processBackgroundTick(elapsed: seconds, now: virtualNow, updateLastSavedAt: false)
+        let gainedPts = saveData.ecoPoints - beforePts
+        let newPlants = max(0, activeInstance.plants.count - beforePlants)
+        let label = seconds >= 3600 ? "+\(Int(seconds / 3600))h" : "+\(Int(seconds / 60))m"
+        bannerNotice = "⏩ 快进 \(label) 完成：生态点 +\(gainedPts)，萌发 +\(newPlants) 株"
     }
 
     func toggleAdminMode() {
@@ -344,7 +400,7 @@ final class TerrariumState: ObservableObject {
         persistence.save(saveData)
     }
 
-    func processBackgroundTick(elapsed explicitElapsed: TimeInterval? = nil, now: Date = Date()) {
+    func processBackgroundTick(elapsed explicitElapsed: TimeInterval? = nil, now: Date = Date(), updateLastSavedAt: Bool = true) {
         let rawElapsed = explicitElapsed ?? max(0, now.timeIntervalSince(saveData.lastSavedAt))
         let elapsed = min(TerrariumConfig.maxOfflineSettlementSeconds, rawElapsed)
 
@@ -407,13 +463,15 @@ final class TerrariumState: ObservableObject {
             appendEventMessage("图鉴新解锁：\(names)")
         }
 
-        saveData.lastSavedAt = now
+        if updateLastSavedAt {
+            saveData.lastSavedAt = now
+        }
         syncPublishedFromSaveData(now: now)
         if activeCrittersChanged {
             vfxSubject.send(.syncCritters)
         }
         persistence.save(saveData)
-        if isSchedulerRunning {
+        if isSchedulerRunning && updateLastSavedAt {
             Task { @MainActor [weak self] in
                 await self?.refreshLocalWeatherIfNeeded()
             }
@@ -421,8 +479,7 @@ final class TerrariumState: ObservableObject {
     }
 
     func flushSave() {
-        saveData.lastSavedAt = Date()
-        persistence.save(saveData)
+        processBackgroundTick(now: Date(), updateLastSavedAt: true)
     }
 
     // MARK: - 普通模式允许的自然演进交互
@@ -643,6 +700,7 @@ final class TerrariumState: ObservableObject {
     func selectPlant(_ id: UUID?) {
         selectedPlantID = id
         isMovingPlant = false
+        isConfirmingPrunePlant = false
         if id != nil {
             selectedDecorID = nil
             movingDecorID = nil
@@ -652,6 +710,7 @@ final class TerrariumState: ObservableObject {
     func beginMoveSelectedPlant() {
         guard selectedPlant != nil else { return }
         isMovingPlant = true
+        isConfirmingPrunePlant = false
         movingDecorID = nil
         bannerNotice = "🪴 请点击沙盘中绿色空地格子完成植物移栽"
     }
@@ -899,6 +958,50 @@ final class TerrariumState: ObservableObject {
     }
 
     func toggleThermalMode(_ targetMode: ThermalMode) {
+        let inst = activeInstance
+        guard !inst.isSleeping else { return }
+
+        // 方案 A：购买安装与开关运行解耦，未购买时先弹出二次确认安装（待机挂壁），不直接开机
+        if targetMode == .heating && !inst.hasHeatLamp {
+            pendingPurchaseThermalMode = (pendingPurchaseThermalMode == .heating) ? nil : .heating
+            return
+        } else if targetMode == .cooling && !inst.hasCoolingFan {
+            pendingPurchaseThermalMode = (pendingPurchaseThermalMode == .cooling) ? nil : .cooling
+            return
+        }
+
+        pendingPurchaseThermalMode = nil
+        var updated = inst
+        let nextMode: ThermalMode = (updated.thermalMode == targetMode) ? .natural : targetMode
+        updated.thermalMode = nextMode
+        updated.ambientRelaxSeconds = 0
+
+        let targetAmbient = TerrariumConfig.baseAmbientTemp(
+            for: updated.atmosphere,
+            biome: updated.biome,
+            thermalMode: nextMode,
+            localOutdoorTempC: saveData.lastKnownLocalTempC
+        )
+
+        switch nextMode {
+        case .heating:
+            let equipName = (updated.biome == .aquatic) ? "恒温加热棒" : "夹缸晒背灯"
+            bannerNotice = "☀️ 已开启\(equipName)：正随时间稳态升温至 \(targetAmbient)°C"
+        case .cooling:
+            bannerNotice = "❄️ 已开启夹缸降温扇：正随时间稳态降温至 \(targetAmbient)°C"
+        case .natural:
+            bannerNotice = "🌿 已关闭温控器材，回归自然室温 (\(targetAmbient)°C)"
+        }
+
+        TerrariumSimulation.updatePlants(instance: &updated, dt: 0)
+        TerrariumSimulation.evaluateCritterEcology(instance: &updated)
+        activeInstance = updated
+        vfxSubject.send(.syncCritters)
+        evaluateCurrentCodexAndSave()
+    }
+
+    func confirmPurchaseThermalEquipment() {
+        guard let targetMode = pendingPurchaseThermalMode else { return }
         var inst = activeInstance
         guard !inst.isSleeping else { return }
 
@@ -907,46 +1010,32 @@ final class TerrariumState: ObservableObject {
             guard saveData.ecoPoints >= cost else {
                 let equipName = (inst.biome == .aquatic) ? "恒温加热棒" : "夹缸晒背灯"
                 bannerNotice = "⚠️ 购置「\(equipName)」需要 \(cost) 生态点"
+                pendingPurchaseThermalMode = nil
                 return
             }
             saveData.ecoPoints -= cost
             inst.hasHeatLamp = true
+            let equipName = (inst.biome == .aquatic) ? "恒温加热棒" : "夹缸晒背灯"
+            bannerNotice = "🔌 已购置并安装「\(equipName)」，随时点击 ☀️ 即可开关"
         } else if targetMode == .cooling && !inst.hasCoolingFan {
             let cost = TerrariumConfig.coolingFanCost
             guard saveData.ecoPoints >= cost else {
                 bannerNotice = "⚠️ 购置「夹缸静音降温扇」需要 \(cost) 生态点"
+                pendingPurchaseThermalMode = nil
                 return
             }
             saveData.ecoPoints -= cost
             inst.hasCoolingFan = true
+            bannerNotice = "🔌 已购置并安装「夹缸静音降温扇」，随时点击 ❄️ 即可开关"
         }
 
-        let nextMode: ThermalMode = (inst.thermalMode == targetMode) ? .natural : targetMode
-        inst.thermalMode = nextMode
-        inst.ambientRelaxSeconds = 0
-
-        let targetAmbient = TerrariumConfig.baseAmbientTemp(
-            for: inst.atmosphere,
-            biome: inst.biome,
-            thermalMode: nextMode,
-            localOutdoorTempC: saveData.lastKnownLocalTempC
-        )
-
-        switch nextMode {
-        case .heating:
-            let equipName = (inst.biome == .aquatic) ? "恒温加热棒" : "夹缸晒背灯"
-            bannerNotice = "☀️ 已开启\(equipName)：正随时间稳态升温至 \(targetAmbient)°C"
-        case .cooling:
-            bannerNotice = "❄️ 已开启夹缸降温扇：正随时间稳态降温至 \(targetAmbient)°C"
-        case .natural:
-            bannerNotice = "🌿 已关闭温控器材，回归自然室温 (\(targetAmbient)°C)"
-        }
-
-        TerrariumSimulation.updatePlants(instance: &inst, dt: 0)
-        TerrariumSimulation.evaluateCritterEcology(instance: &inst)
+        pendingPurchaseThermalMode = nil
         activeInstance = inst
-        vfxSubject.send(.syncCritters)
         evaluateCurrentCodexAndSave()
+    }
+
+    func cancelPurchaseThermalEquipment() {
+        pendingPurchaseThermalMode = nil
     }
 
     // MARK: - 多容器生态缸自由切换、购置与拆缸退点（上限 8 口）

@@ -446,6 +446,36 @@ runTest("test_affinityPerks_economyAntiExploits_andAquaticRearFeedingRing") {
     check(TerrariumConfig.tankEfficiencyMultiplier(slotIndex: 0) == 1.0 && TerrariumConfig.tankEfficiencyMultiplier(slotIndex: 1) == 0.80, "第 2 口缸产点效率应递减为 80%")
 }
 
+runTest("test_economyRebalance_offlineDecay_andNewDecorCatalog") {
+    let now = Date()
+    var data = TerrariumSaveData()
+    data.ecoPoints = 5
+    data.lastSavedAt = now.addingTimeInterval(-8.0 * 3600.0)
+    data.containers[0].instance.humidity = 65
+    data.containers[0].instance.temperature = 23
+    data.containers[0].instance.plants = [PlantInstance(speciesID: "moss", coord: GridCoord(col: 3, row: 3), stage: .mature)]
+
+    let summary = TerrariumSimulation.settleOfflineAll(data: &data, now: now)
+    check(summary.totalEarnedEcoPoints >= 18 && summary.totalEarnedEcoPoints <= 35, "8小时离线经分段衰减后单缸产出应在健康区间(18~35点)，实际为 \(summary.totalEarnedEcoPoints)")
+
+    // 离线进食冷却校验：刚领过进食奖励的动物在 3 小时内离线再吃不重复产点
+    var mealInst = TerrariumInstanceState.empty(biome: .meadow, now: now, nextEventDelay: 1800)
+    mealInst.humidity = 65
+    mealInst.foodBowlPortions = 2
+    mealInst.critters = [CritterPersistentState(kind: .snail, residency: .resident, mealsEaten: 1, hunger: 65.0, coord: GridCoord(col: 4, row: 4), lastFedRewardAt: now.addingTimeInterval(-600))]
+    var mealPts = 0
+    var mealCodex: [String] = []
+    let mealSum = TerrariumSimulation.advanceInstance(instance: &mealInst, ecoPoints: &mealPts, unlockedCodexIDs: &mealCodex, elapsedSeconds: 300, now: now, allowRandomSpawn: false)
+    check(mealSum.earnedEcoPoints == 0 && mealInst.critters[0].mealsEaten == 2, "冷却期内离线进食应能吃饱但不重复发放点数")
+
+    // 新摆件目录与可穿行摆件寻路校验
+    for biome in TerrariumBiome.allCases {
+        check(TerrariumConfig.decorCatalog(for: biome).count == 5, "\(biome.rawValue) 应包含 5 件摆件")
+    }
+    let walkBlocked = GridPathfinder.buildBlockedSet(enabledDecorIDs: ["meadow_stepping_stones", "sand_rib_arch"], plants: [], biome: .meadow)
+    check(!walkBlocked.contains(GridCoord(col: 5, row: 2)), "汀步石与风蚀拱应允许小动物踩踏/穿行，不得阻挡寻路")
+}
+
 print("\nSummary: \(passedCount) passed, \(failedCount) failed.")
 if failedCount > 0 {
     Foundation.exit(1)

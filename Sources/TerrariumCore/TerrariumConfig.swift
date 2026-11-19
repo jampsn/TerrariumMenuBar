@@ -68,7 +68,7 @@ public enum TerrariumConfig {
         switch decorID {
         case "driftwood", "sand_wood", "rainforest_vine", "aquatic_driftwood": return (3, 2)
         case "shallow_pool", "sand_rock", "boulder", "rainforest_waterfall", "rainforest_bark", "aquatic_bubble_rock", "aquatic_castle": return (2, 2)
-        case "sand_pebbles": return (2, 1)
+        case "sand_pebbles", "meadow_stepping_stones", "sand_rib_arch", "rainforest_slate_ledge", "aquatic_seiryu_stone": return (2, 1)
         default: return (1, 1)
         }
     }
@@ -79,6 +79,8 @@ public enum TerrariumConfig {
         case "driftwood", "sand_wood", "rainforest_vine", "aquatic_driftwood": return GridCoord(col: 2, row: 3)
         case "boulder", "rainforest_bark", "aquatic_castle": return GridCoord(col: 1, row: 7)
         case "sand_pebbles": return GridCoord(col: 8, row: 7)
+        case "meadow_stepping_stones", "sand_rib_arch", "rainforest_slate_ledge", "aquatic_seiryu_stone": return GridCoord(col: 5, row: 2)
+        case "meadow_mushroom_log", "sand_cairn", "rainforest_bromeliad_stump", "aquatic_bamboo_tube": return GridCoord(col: 4, row: 7)
         default: return GridCoord(col: 5, row: 5)
         }
     }
@@ -100,8 +102,11 @@ public enum TerrariumConfig {
     }
 
     public static func decorBlocksMovement(_ decorID: String) -> Bool {
-        // 浅水洼与卵石滩允许动物涉水/踩踏，不死堵路径
-        decorID != "shallow_pool" && decorID != "sand_pebbles"
+        // 浅水洼、卵石滩、汀步石与风蚀拱允许动物涉水/踩踏/穿过，不死堵路径
+        decorID != "shallow_pool"
+            && decorID != "sand_pebbles"
+            && decorID != "meadow_stepping_stones"
+            && decorID != "sand_rib_arch"
     }
 
     public static func anchorGridPos(for decorID: String, decorOrigins: [String: GridCoord] = [:]) -> (gx: Double, gy: Double) {
@@ -141,8 +146,9 @@ public enum TerrariumConfig {
     public static let localTempTrackingIntervalSeconds: TimeInterval = 600.0
     public static let glassFogAccumulationSeconds: TimeInterval = 2700.0
     public static let aquaticAlgaeAccumulationSeconds: TimeInterval = 7200.0
-    public static let ecoPointBaseIntervalSeconds: TimeInterval = 360.0
-    public static let ecoPointOptimalIntervalSeconds: TimeInterval = 240.0
+    public static let ecoPointBaseIntervalSeconds: TimeInterval = 1200.0
+    public static let ecoPointOptimalIntervalSeconds: TimeInterval = 720.0
+    public static let offlineFullRateSeconds: TimeInterval = 4.0 * 3600.0
     public static let maxOfflineSettlementSeconds: TimeInterval = 8.0 * 3600.0
     public static let weatherEventIntervalRange: ClosedRange<TimeInterval> = 1200.0...2400.0
     public static let weatherEventDurationSeconds: TimeInterval = 900.0
@@ -194,9 +200,9 @@ public enum TerrariumConfig {
              "succulent", "aloe", "cactus", "monstera", "bromeliad", "orchid",
              "marimo", "anubias", "lotus":
             return 2
-        case "rhino_beetle", "tree_frog", "firefly", "moon_moth",
-             "sand_gecko", "scarab",
-             "hercules_beetle", "chameleon",
+        case "rhino_beetle", "tree_frog", "fire_newt", "firefly", "moon_moth",
+             "sand_gecko", "scarab", "sand_scorpion",
+             "hercules_beetle", "chameleon", "dart_frog",
              "betta_fish", "crayfish":
             return 5
         default:
@@ -206,29 +212,29 @@ public enum TerrariumConfig {
 
     public static func hungerRatePerHour(for kind: CritterKind) -> Double {
         switch kind {
-        case .snail, .pillBug, .rhinoBeetle, .leafInsect, .cherryShrimp: return 5.0
-        case .treeFrog, .amberBeetle, .herculesBeetle, .neonTetra: return 6.0
-        case .sandGecko, .scarab, .chameleon, .bettaFish, .crayfish: return 7.0
+        case .snail, .pillBug, .rhinoBeetle, .leafInsect, .cherryShrimp, .corydoras: return 5.0
+        case .treeFrog, .fireNewt, .dartFrog, .amberBeetle, .herculesBeetle, .neonTetra: return 6.0
+        case .sandGecko, .sandScorpion, .scarab, .chameleon, .bettaFish, .crayfish: return 7.0
         }
     }
 
     public static func mealsRequiredToSettle(kind: CritterKind, enabledDecorIDs: [String]) -> Int {
         switch kind {
         case .snail: return enabledDecorIDs.contains("driftwood") ? 1 : 2
-        case .pillBug, .amberBeetle, .scarab, .rhinoBeetle, .leafInsect, .herculesBeetle, .cherryShrimp, .neonTetra: return 1
-        case .treeFrog, .sandGecko, .chameleon, .bettaFish, .crayfish: return 2
+        case .pillBug, .amberBeetle, .scarab, .rhinoBeetle, .leafInsect, .herculesBeetle, .cherryShrimp, .neonTetra, .corydoras: return 1
+        case .treeFrog, .fireNewt, .sandGecko, .sandScorpion, .chameleon, .dartFrog, .bettaFish, .crayfish: return 2
         }
     }
 
     public static func foodChainGroup(for kind: CritterKind) -> FoodChainGroup {
         switch kind {
         case .snail, .pillBug, .rhinoBeetle: return .meadowInsects
-        case .treeFrog: return .meadowPredator
+        case .treeFrog, .fireNewt: return .meadowPredator
         case .amberBeetle, .scarab: return .sandBeetles
-        case .sandGecko: return .sandPredator
+        case .sandGecko, .sandScorpion: return .sandPredator
         case .leafInsect, .herculesBeetle: return .rainforestInsects
-        case .chameleon: return .rainforestPredator
-        case .cherryShrimp, .neonTetra: return .aquaticPeaceful
+        case .chameleon, .dartFrog: return .rainforestPredator
+        case .cherryShrimp, .neonTetra, .corydoras: return .aquaticPeaceful
         case .bettaFish: return .aquaticBetta
         case .crayfish: return .aquaticPredator
         }
@@ -361,6 +367,18 @@ public enum TerrariumConfig {
                     frameHeight: 22,
                     unlockConditionText: "溪石浅水洼 + 卷叶蕨≥1 + 湿度≥55%",
                     foodChainNote: "两栖捕食者 · 不可与虫螺同缸"
+                ),
+                CritterShopSpec(
+                    kind: .fireNewt,
+                    name: "红腹小蝾螈",
+                    biome: .meadow,
+                    cost: 22,
+                    group: .meadowPredator,
+                    assetName: "char_fire_newt_sheet",
+                    frameWidth: 22,
+                    frameHeight: 16,
+                    unlockConditionText: "溪涧汀步石 + 浅水洼 + ≤21°C + 湿度≥68%",
+                    foodChainNote: "两栖捕食者 · 可与树蛙同栖，互斥虫螺"
                 )
             ]
         case .sand:
@@ -399,6 +417,18 @@ public enum TerrariumConfig {
                     frameWidth: 24,
                     frameHeight: 16,
                     unlockConditionText: "风蚀红砂岩 + 沙地植物≥2 + ≥24°C",
+                    foodChainNote: "沙地捕食者 · 不可与甲虫同缸"
+                ),
+                CritterShopSpec(
+                    kind: .sandScorpion,
+                    name: "黄金沙蝎",
+                    biome: .sand,
+                    cost: 24,
+                    group: .sandPredator,
+                    assetName: "char_sand_scorpion_sheet",
+                    frameWidth: 22,
+                    frameHeight: 16,
+                    unlockConditionText: "沙漠叠石堆 + 风蚀拱 + 仙人球≥1 + ≥26°C",
                     foodChainNote: "沙地捕食者 · 不可与甲虫同缸"
                 )
             ]
@@ -439,6 +469,18 @@ public enum TerrariumConfig {
                     frameHeight: 20,
                     unlockConditionText: "藤蔓攀爬架 + 龟背竹/凤梨≥2 + ≥25°C + 湿度≥70%",
                     foodChainNote: "树栖捕食者（随环境动态变色）· 互斥虫群"
+                ),
+                CritterShopSpec(
+                    kind: .dartFrog,
+                    name: "蓝宝石箭毒蛙",
+                    biome: .rainforest,
+                    cost: 24,
+                    group: .rainforestPredator,
+                    assetName: "char_dart_frog_sheet",
+                    frameWidth: 20,
+                    frameHeight: 18,
+                    unlockConditionText: "积水凤梨朽桩 + 积水凤梨≥1 + 湿度≥72%",
+                    foodChainNote: "林下捕食者 · 可与变色龙共存，互斥虫群"
                 )
             ]
         case .aquatic:
@@ -490,6 +532,18 @@ public enum TerrariumConfig {
                     frameHeight: 16,
                     unlockConditionText: "冒泡火山石 + 躲避屋 + 水草≥1",
                     foodChainNote: "水底掠食领地 · 不可与鱼虾/斗鱼同缸"
+                ),
+                CritterShopSpec(
+                    kind: .corydoras,
+                    name: "熊猫鼠鱼",
+                    biome: .aquatic,
+                    cost: 14,
+                    group: .aquaticPeaceful,
+                    assetName: "char_corydoras_sheet",
+                    frameWidth: 18,
+                    frameHeight: 14,
+                    unlockConditionText: "莫斯竹筒屋 + 沉木水草石 + 溶氧≥60%",
+                    foodChainNote: "温顺底栖清道夫 · 可与米虾/灯鱼混养"
                 )
             ]
         }
@@ -677,6 +731,26 @@ public enum TerrariumConfig {
                     nicheDescription: "局部降温 -1°C · 助推微光菇与月光飞蛾",
                     unlocked: false,
                     enabled: false
+                ),
+                DecorItem(
+                    id: "meadow_mushroom_log",
+                    name: "菌丝小木墩",
+                    assetName: "env_meadow_mushroom_log",
+                    biome: .meadow,
+                    cost: 8,
+                    nicheDescription: "微光菇萌发+40% · 丰富森林底层生态",
+                    unlocked: false,
+                    enabled: false
+                ),
+                DecorItem(
+                    id: "meadow_stepping_stones",
+                    name: "溪涧汀步石",
+                    assetName: "env_meadow_stepping_stones",
+                    biome: .meadow,
+                    cost: 7,
+                    nicheDescription: "可行走装饰不堵路 · 提升小动物巡逻质感",
+                    unlocked: false,
+                    enabled: false
                 )
             ]
         case .sand:
@@ -708,6 +782,26 @@ public enum TerrariumConfig {
                     biome: .sand,
                     cost: 12,
                     nicheDescription: "荒漠植物萌发+50% · 助推芦荟与仙人球",
+                    unlocked: false,
+                    enabled: false
+                ),
+                DecorItem(
+                    id: "sand_cairn",
+                    name: "沙漠叠石堆",
+                    assetName: "env_sand_cairn",
+                    biome: .sand,
+                    cost: 8,
+                    nicheDescription: "荒漠路标石堆 · 营造沙丘高低落差",
+                    unlocked: false,
+                    enabled: false
+                ),
+                DecorItem(
+                    id: "sand_rib_arch",
+                    name: "枯木风蚀拱",
+                    assetName: "env_sand_rib_arch",
+                    biome: .sand,
+                    cost: 11,
+                    nicheDescription: "可穿过遮阴拱门 · 沙地植物萌发+25%",
                     unlocked: false,
                     enabled: false
                 )
@@ -743,6 +837,26 @@ public enum TerrariumConfig {
                     nicheDescription: "枯叶脩与长戟大兜虫必配隐蔽所",
                     unlocked: false,
                     enabled: false
+                ),
+                DecorItem(
+                    id: "rainforest_bromeliad_stump",
+                    name: "积水凤梨朽桩",
+                    assetName: "env_rainforest_bromeliad_stump",
+                    biome: .rainforest,
+                    cost: 9,
+                    nicheDescription: "树洞蓄水 · 被动保湿 -10% 蒸发",
+                    unlocked: false,
+                    enabled: false
+                ),
+                DecorItem(
+                    id: "rainforest_slate_ledge",
+                    name: "苔藓阶梯岩",
+                    assetName: "env_rainforest_slate_ledge",
+                    biome: .rainforest,
+                    cost: 11,
+                    nicheDescription: "阶梯层岩 · 雨林植物萌发+30%",
+                    unlocked: false,
+                    enabled: false
                 )
             ]
         case .aquatic:
@@ -776,12 +890,32 @@ public enum TerrariumConfig {
                     nicheDescription: "虾蟹脱壳藏身洞 · 米虾与蓝螯虾必需",
                     unlocked: false,
                     enabled: false
+                ),
+                DecorItem(
+                    id: "aquatic_seiryu_stone",
+                    name: "青龙造景石组",
+                    assetName: "env_aquatic_seiryu_stone",
+                    biome: .aquatic,
+                    cost: 10,
+                    nicheDescription: "稳住水体清澈 · 减缓缸壁藻垢滋生 -20%",
+                    unlocked: false,
+                    enabled: false
+                ),
+                DecorItem(
+                    id: "aquatic_bamboo_tube",
+                    name: "莫斯竹筒屋",
+                    assetName: "env_aquatic_bamboo_tube",
+                    biome: .aquatic,
+                    cost: 8,
+                    nicheDescription: "水草萌发+20% · 虾鱼穿梭微缩隧道",
+                    unlocked: false,
+                    enabled: false
                 )
             ]
         }
     }
 
-    // MARK: - 全局生态图鉴（共 29 项）
+    // MARK: - 全局生态图鉴（共 33 项）
     public static func defaultCodexEntries() -> [CodexEntry] {
         [
             // 苔原缸植物
@@ -794,6 +928,7 @@ public enum TerrariumConfig {
             CodexEntry(id: "pill_bug", name: "迷你西瓜虫", biome: .meadow, category: "动物", condition: "腐殖沉木 + 苔藓≥1", desc: "圆滚滚的小小分解者，轻触连点会缩成小球。", unlocked: false),
             CodexEntry(id: "rhino_beetle", name: "栗壳独角仙", biome: .meadow, category: "动物", condition: "腐殖沉木 + 卷叶蕨≥1 + 湿度≥55%", desc: "顶着优雅 Y 型大角的温顺大型甲虫，喜栖沉木旁。", unlocked: false),
             CodexEntry(id: "tree_frog", name: "绿豆树蛙", biome: .meadow, category: "动物", condition: "溪石浅水洼 + 卷叶蕨≥1 + 湿度≥55%", desc: "鼓着高凸大眼的林间捕食者，需独立单养不可混放虫螺。", unlocked: false),
+            CodexEntry(id: "fire_newt", name: "红腹小蝾螈", biome: .meadow, category: "稀有动物", condition: "汀步石 + 浅水洼 + ≤21°C + 湿度≥68%", desc: "黑背朱腹的冷溪两栖小精灵，偏爱清凉湿润的苔原石滩。", unlocked: false),
             CodexEntry(id: "firefly", name: "微光萤火虫", biome: .meadow, category: "稀有动物", condition: "腐殖沉木 + 幸运草/蕨 + 夜/雨高湿", desc: "伴随夜风在草叶上空翩翩起舞的微光。", unlocked: false),
             CodexEntry(id: "moon_moth", name: "月光小飞蛾", biome: .meadow, category: "专属高阶", condition: "微光菇≥1 + 夜晚 + 高湿(≥72%)", desc: "仅被发光蘑菇吸引入驻的梦幻夜行精灵。", unlocked: false),
             // 沙地缸植物 & 动物
@@ -803,6 +938,7 @@ public enum TerrariumConfig {
             CodexEntry(id: "amber_beetle", name: "琥珀甲虫", biome: .sand, category: "沙地动物", condition: "暖阳卵石滩 + 多肉≥1", desc: "喜欢在暖阳卵石旁活动、爬去食盆的小甲虫。", unlocked: false),
             CodexEntry(id: "sand_gecko", name: "豹纹沙守宫", biome: .sand, category: "沙地动物", condition: "风蚀红砂岩 + 沙地植物≥2 + ≥24°C", desc: "拖着斑点小尾巴在沙地上慢跑的萌宠守宫。", unlocked: false),
             CodexEntry(id: "scarab", name: "琉璃圣甲虫", biome: .sand, category: "专属高阶", condition: "仙人球≥1 + 芦荟≥1 + 暖干(≥27°C, ≤42%)", desc: "只在仙人球与芦荟共存的暖阳荒漠中现身的宝石甲虫。", unlocked: false),
+            CodexEntry(id: "sand_scorpion", name: "黄金沙蝎", biome: .sand, category: "专属高阶", condition: "叠石堆 + 风蚀拱 + 仙人球≥1 + ≥26°C", desc: "高举双钳与金黄尾刺在红砂间巡逻的沙漠守卫。", unlocked: false),
             // 雨林缸植物 & 动物
             CodexEntry(id: "monstera", name: "龟背竹", biome: .rainforest, category: "雨林植物", condition: "热带雨林缸 + 湿度≥60%", desc: "标志性裂孔阔叶植物，是变色龙最喜欢的翠绿伪装屏障。", unlocked: false),
             CodexEntry(id: "bromeliad", name: "积水凤梨", biome: .rainforest, category: "雨林植物", condition: "龟背竹≥1 + 湿度≥72%", desc: "中心叶杯常蓄积甘露的艳红热带凤梨。", unlocked: false),
@@ -810,6 +946,7 @@ public enum TerrariumConfig {
             CodexEntry(id: "leaf_insect", name: "枯叶拟态脩", biome: .rainforest, category: "雨林动物", condition: "朽木树洞 + 龟背竹≥1 + 湿度≥65%", desc: "脉络如真实叶片般精致，轻碰会随风轻晃。", unlocked: false),
             CodexEntry(id: "hercules_beetle", name: "长戟大兜虫", biome: .rainforest, category: "雨林动物", condition: "朽木树洞 + 热带兰花≥1 + ≥24°C", desc: "身披金甲、拥有标志性前后长戟大角的力量之王。", unlocked: false),
             CodexEntry(id: "chameleon", name: "七彩高冠变色龙", biome: .rainforest, category: "专属高阶", condition: "藤蔓架 + 雨林植被≥2 + ≥25°C + 湿度≥70%", desc: "会根据所处植物与藤蔓色彩实时拟态变色的雨林明星！", unlocked: false),
+            CodexEntry(id: "dart_frog", name: "蓝宝石箭毒蛙", biome: .rainforest, category: "专属高阶", condition: "积水凤梨朽桩 + 积水凤梨≥1 + 湿度≥72%", desc: "闪烁宝石蓝警戒斑的雨林迷你精灵，最爱在凤梨叶下轻跃。", unlocked: false),
             // 碧波鱼缸植物 & 动物
             CodexEntry(id: "marimo", name: "莫斯藻球", biome: .aquatic, category: "水草", condition: "碧波鱼缸 + 溶氧≥55%", desc: "毛茸茸的圆球水藻，水底米虾的最爱。", unlocked: false),
             CodexEntry(id: "anubias", name: "皇冠水草", biome: .aquatic, category: "水草", condition: "莫斯藻球≥1 + 溶氧≥65%", desc: "苍翠阔叶水草，为红绿灯鱼提供穿行林影。", unlocked: false),
@@ -817,7 +954,8 @@ public enum TerrariumConfig {
             CodexEntry(id: "cherry_shrimp", name: "樱花米虾", biome: .aquatic, category: "水生生物", condition: "陶瓷躲避屋 + 莫斯藻球≥1", desc: "在河沙与藻球间忙碌拾藻、偶尔轻盈游水换草的通红小精灵。", unlocked: false),
             CodexEntry(id: "neon_tetra", name: "红绿灯鱼群", biome: .aquatic, category: "水生生物", condition: "皇冠水草≥1 + 溶氧≥65%", desc: "体侧闪烁着电光蓝与霓虹红、成群结队在中层游曳的观赏鱼。", unlocked: false),
             CodexEntry(id: "betta_fish", name: "半月斗鱼", biome: .aquatic, category: "专属高阶", condition: "水睡莲≥1 + 水温≥24°C + 溶氧≥72%", desc: "性格好斗需单独分缸，拖曳蓝红半月大尾鳍在睡莲下优雅巡游。", unlocked: false),
-            CodexEntry(id: "crayfish", name: "天空蓝螯虾", biome: .aquatic, category: "水底霸主", condition: "冒泡火山石 + 躲避屋 + 水草≥1", desc: "威风凛凛的蓝甲螯虾，不可与小鱼、米虾或斗鱼混养。", unlocked: false)
+            CodexEntry(id: "crayfish", name: "天空蓝螯虾", biome: .aquatic, category: "水底霸主", condition: "冒泡火山石 + 躲避屋 + 水草≥1", desc: "威风凛凛的蓝甲螯虾，不可与小鱼、米虾或斗鱼混养。", unlocked: false),
+            CodexEntry(id: "corydoras", name: "熊猫鼠鱼", biome: .aquatic, category: "水生生物", condition: "莫斯竹筒屋 + 沉木水草石 + 溶氧≥60%", desc: "戴着黑眼罩的可爱底栖鼠鱼，总爱用小胡须在河沙间翻找碎屑。", unlocked: false)
         ]
     }
 
@@ -828,16 +966,20 @@ public enum TerrariumConfig {
         case .pillBug: return "小团子"
         case .rhinoBeetle: return "独角侠"
         case .treeFrog: return "青瓜"
+        case .fireNewt: return "小赤腹"
         case .amberBeetle: return "小琥珀"
         case .sandGecko: return "小橘"
+        case .sandScorpion: return "金钳子"
         case .scarab: return "琉璃星"
         case .leafInsect: return "青叶"
         case .herculesBeetle: return "大力神"
         case .chameleon: return "小七彩"
+        case .dartFrog: return "小蓝莓"
         case .cherryShrimp: return "小红虾"
         case .neonTetra: return "霓虹豆"
         case .bettaFish: return "蓝绸"
         case .crayfish: return "蓝钳将"
+        case .corydoras: return "小熊猫"
         }
     }
 
@@ -847,16 +989,20 @@ public enum TerrariumConfig {
         case .pillBug: return "害羞团"
         case .rhinoBeetle: return "护木侠"
         case .treeFrog: return "爱戏水"
+        case .fireNewt: return "喜阴凉"
         case .amberBeetle: return "晒太阳"
         case .sandGecko: return "好奇眼"
+        case .sandScorpion: return "守沙者"
         case .scarab: return "守沙者"
         case .leafInsect: return "静如叶"
         case .herculesBeetle: return "角力士"
         case .chameleon: return "变色魔术师"
+        case .dartFrog: return "爱蹦跳"
         case .cherryShrimp: return "勤劳钳"
         case .neonTetra: return "追光手"
         case .bettaFish: return "优雅尾"
         case .crayfish: return "缸霸"
+        case .corydoras: return "翻沙手"
         }
     }
 
@@ -866,6 +1012,9 @@ public enum TerrariumConfig {
         case .treeFrog:
             guard enabledDecorIDs.contains("shallow_pool") else { return nil }
             return effectiveDecorOrigin(for: "shallow_pool", decorOrigins: decorOrigins)
+        case .fireNewt:
+            guard enabledDecorIDs.contains("meadow_stepping_stones") else { return nil }
+            return effectiveDecorOrigin(for: "meadow_stepping_stones", decorOrigins: decorOrigins)
         case .snail, .pillBug, .rhinoBeetle:
             guard enabledDecorIDs.contains("driftwood") else { return nil }
             let o = effectiveDecorOrigin(for: "driftwood", decorOrigins: decorOrigins)
@@ -877,6 +1026,10 @@ public enum TerrariumConfig {
             guard enabledDecorIDs.contains("sand_rock") else { return nil }
             let o = effectiveDecorOrigin(for: "sand_rock", decorOrigins: decorOrigins)
             return GridCoord(col: o.col, row: min(gridRows - 1, o.row + 2))
+        case .sandScorpion:
+            guard enabledDecorIDs.contains("sand_cairn") else { return nil }
+            let o = effectiveDecorOrigin(for: "sand_cairn", decorOrigins: decorOrigins)
+            return GridCoord(col: o.col, row: max(0, o.row - 1))
         case .scarab:
             guard enabledDecorIDs.contains("sand_wood") else { return nil }
             let o = effectiveDecorOrigin(for: "sand_wood", decorOrigins: decorOrigins)
@@ -889,10 +1042,18 @@ public enum TerrariumConfig {
             guard enabledDecorIDs.contains("rainforest_vine") else { return nil }
             let o = effectiveDecorOrigin(for: "rainforest_vine", decorOrigins: decorOrigins)
             return GridCoord(col: o.col + 1, row: min(gridRows - 1, o.row + 2))
+        case .dartFrog:
+            guard enabledDecorIDs.contains("rainforest_bromeliad_stump") else { return nil }
+            let o = effectiveDecorOrigin(for: "rainforest_bromeliad_stump", decorOrigins: decorOrigins)
+            return GridCoord(col: o.col, row: max(0, o.row - 1))
         case .cherryShrimp, .crayfish:
             guard enabledDecorIDs.contains("aquatic_castle") else { return nil }
             let o = effectiveDecorOrigin(for: "aquatic_castle", decorOrigins: decorOrigins)
             return GridCoord(col: o.col + 1, row: max(0, o.row - 1))
+        case .corydoras:
+            guard enabledDecorIDs.contains("aquatic_bamboo_tube") else { return nil }
+            let o = effectiveDecorOrigin(for: "aquatic_bamboo_tube", decorOrigins: decorOrigins)
+            return GridCoord(col: o.col, row: max(0, o.row - 1))
         case .neonTetra, .bettaFish:
             guard enabledDecorIDs.contains("aquatic_bubble_rock") else { return nil }
             let o = effectiveDecorOrigin(for: "aquatic_bubble_rock", decorOrigins: decorOrigins)

@@ -162,6 +162,7 @@ final class StageAnimator: ObservableObject {
         switch kind {
         case .neonTetra: return 15.5 + altitudeBias
         case .bettaFish: return 22.5
+        case .corydoras: return 1.5
         default: return 0.0
         }
     }
@@ -198,6 +199,13 @@ final class StageAnimator: ObservableObject {
             case .patrol: return c.prefersMidwaterSwim ? 8.5 : 0.0
             case .idle, .petted: return c.prefersMidwaterSwim ? 6.5 : 0.0
             }
+        case .corydoras:
+            switch c.behavior {
+            case .eating, .seekingFood: return 2.5
+            case .startle: return 7.0
+            case .sleep: return 0.5
+            case .idle, .patrol, .petted: return 1.5
+            }
         default:
             return 0.0
         }
@@ -226,11 +234,15 @@ final class StageAnimator: ObservableObject {
             bobOffset = cos(c.swimPhase) * 1.6
         } else if c.kind == .cherryShrimp && c.smoothBaseGZ > 0.8 {
             bobOffset = sin(c.swimPhase * 1.3) * 0.7
+        } else if c.kind == .crayfish {
+            bobOffset = 0.0
+        } else if c.kind == .corydoras {
+            bobOffset = sin(c.swimPhase * 0.9) * 0.5
         } else {
             bobOffset = 0.0
         }
 
-        let hopArc = (c.kind == .treeFrog && (c.behavior == .patrol || c.behavior == .seekingFood))
+        let hopArc = ((c.kind == .treeFrog || c.kind == .dartFrog) && (c.behavior == .patrol || c.behavior == .seekingFood))
             ? sin(c.hopProgress * .pi) * 7.0
             : 0.0
         c.gz = max(0.0, c.smoothBaseGZ + bobOffset + hopArc)
@@ -300,7 +312,26 @@ final class StageAnimator: ObservableObject {
         }
 
         emitAquaticBubbles(state: state)
+        emitSoulmateSparkles(state: state)
         updateParticles()
+    }
+
+    private func emitSoulmateSparkles(state: TerrariumState) {
+        guard !state.isSleeping, (tick % 50) == 0 else { return }
+        for (idx, c) in critterRuntimes.enumerated() where c.isLeader {
+            let affinity = state.critters.first(where: { $0.kind == c.kind })?.affinity ?? 0
+            guard TerrariumConfig.affinityStage(for: affinity) == .soulmate else { continue }
+            guard ((tick / 50) + idx) % 2 == 0 else { continue }
+            let pt = TerrariumConfig.isoToScreen(gx: c.gx, gy: c.gy, gz: c.gz)
+            appendParticle(PixelParticle(
+                x: pt.x + Double.random(in: -4...4),
+                y: pt.y - 12.0,
+                vx: Double.random(in: -0.15...0.15),
+                vy: -0.35,
+                kind: .sparkle,
+                life: 16
+            ))
+        }
     }
 
     private func reservedFoodSlots(excluding index: Int) -> Set<GridCoord> {
@@ -505,16 +536,18 @@ final class StageAnimator: ObservableObject {
 
             let stepRate: Double
             switch c.kind {
-            case .treeFrog: stepRate = 1.0 / 10.0
+            case .treeFrog, .dartFrog: stepRate = 1.0 / 10.0
             case .snail: stepRate = 1.0 / 28.0
-            case .pillBug: stepRate = 1.0 / 16.0
+            case .pillBug, .fireNewt: stepRate = 1.0 / 16.0
             case .amberBeetle, .scarab: stepRate = 1.0 / 12.0
             case .rhinoBeetle, .herculesBeetle, .crayfish: stepRate = 1.0 / 15.0
             case .cherryShrimp: stepRate = c.prefersMidwaterSwim ? (1.0 / 12.0) : (1.0 / 16.0)
             case .neonTetra: stepRate = 1.0 / 13.0
             case .bettaFish: stepRate = 1.0 / 18.0
+            case .corydoras: stepRate = 1.0 / 14.0
             case .leafInsect: stepRate = 1.0 / 22.0
             case .sandGecko: stepRate = 1.0 / 11.0
+            case .sandScorpion: stepRate = 1.0 / 14.0
             case .chameleon: stepRate = 1.0 / 18.0
             }
 
@@ -786,6 +819,10 @@ final class StageAnimator: ObservableObject {
                     case .bettaFish: reactText = "展鳍!"
                     case .cherryShrimp: reactText = "弹尾!"
                     case .neonTetra: reactText = "散游!"
+                    case .fireNewt: reactText = "吐泡!"
+                    case .sandScorpion: reactText = "翘尾!"
+                    case .dartFrog: reactText = "亮斑!"
+                    case .corydoras: reactText = "钻沙!"
                     default: reactText = "!"
                     }
                     appendParticle(PixelParticle(x: screenPos.x, y: screenPos.y - 16, vx: 0, vy: -0.45, kind: .popup, life: 22, text: reactText))
@@ -800,7 +837,7 @@ final class StageAnimator: ObservableObject {
                         sparkleCount = leveledUp ? 8 : 4
                     case .onCooldown, .dailyLimitReached, .recoveringFromStartle:
                         heartSymbol = isSoulmate ? "💛" : "♥"
-                        sparkleCount = 0
+                        sparkleCount = isSoulmate ? 2 : 0
                     }
                     appendParticle(PixelParticle(x: screenPos.x, y: screenPos.y - 15, vx: 0, vy: -0.42, kind: .popup, life: 24, text: heartSymbol))
                     for _ in 0..<sparkleCount {

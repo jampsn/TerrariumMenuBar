@@ -107,19 +107,23 @@ public enum CritterKind: String, Codable, CaseIterable {
     case pillBug = "pill_bug"
     case rhinoBeetle = "rhino_beetle"
     case treeFrog = "tree_frog"
+    case fireNewt = "fire_newt"
     // 沙地缸专属
     case amberBeetle = "amber_beetle"
     case scarab = "scarab"
     case sandGecko = "sand_gecko"
+    case sandScorpion = "sand_scorpion"
     // 热带雨林缸专属
     case leafInsect = "leaf_insect"
     case herculesBeetle = "hercules_beetle"
     case chameleon = "chameleon"
+    case dartFrog = "dart_frog"
     // 碧波水草鱼缸专属
     case cherryShrimp = "cherry_shrimp"
     case neonTetra = "neon_tetra"
     case bettaFish = "betta_fish"
     case crayfish = "crayfish"
+    case corydoras = "corydoras"
 }
 
 public enum FoodChainGroup: String, Codable, Equatable {

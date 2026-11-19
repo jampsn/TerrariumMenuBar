@@ -71,11 +71,16 @@ public enum TerrariumSimulation {
 
         var decorReduction = 0.0
         if instance.biome == .meadow && instance.enabledDecorIDs.contains("shallow_pool") {
-            decorReduction = 0.20
-        } else if instance.biome == .rainforest && instance.enabledDecorIDs.contains("rainforest_waterfall") {
-            decorReduction = 0.25
+            decorReduction += 0.20
+        } else if instance.biome == .rainforest {
+            if instance.enabledDecorIDs.contains("rainforest_waterfall") {
+                decorReduction += 0.25
+            }
+            if instance.enabledDecorIDs.contains("rainforest_bromeliad_stump") {
+                decorReduction += 0.10
+            }
         } else if instance.biome == .aquatic && instance.enabledDecorIDs.contains("aquatic_bubble_rock") {
-            decorReduction = 0.30
+            decorReduction += 0.30
         }
         let retention = max(0.40, 1.0 - floraReduction - decorReduction)
         return TerrariumConfig.baseEvaporationPerHour * tempFactor * biomeFactor * thermalEvapFactor * retention
@@ -115,7 +120,8 @@ public enum TerrariumSimulation {
                 elapsedSeconds: cappedElapsed,
                 now: now,
                 localOutdoorTempC: data.lastKnownLocalTempC,
-                tankSlotIndex: idx
+                tankSlotIndex: idx,
+                isOfflineSettlement: true
             )
             data.containers[idx].instance = inst
             totalPoints += summary.earnedEcoPoints
@@ -142,7 +148,8 @@ public enum TerrariumSimulation {
         now: Date = Date(),
         allowRandomSpawn: Bool = true,
         localOutdoorTempC: Int? = nil,
-        tankSlotIndex: Int = 0
+        tankSlotIndex: Int = 0,
+        isOfflineSettlement: Bool = false
     ) -> InstanceAdvanceSummary {
         guard !instance.isSleeping, elapsedSeconds > 0 else {
             return InstanceAdvanceSummary(
@@ -161,6 +168,7 @@ public enum TerrariumSimulation {
         var arrived: [CritterKind] = []
         var settled: [CritterKind] = []
         var remaining = elapsedSeconds
+        var progressedSeconds: TimeInterval = 0
         let stepSize: TimeInterval = 60.0
         var unlockedSet = Set(unlockedCodexIDs)
         var newlyUnlockedAll: [String] = []
@@ -175,14 +183,16 @@ public enum TerrariumSimulation {
         while remaining > 0 {
             let dt = min(remaining, stepSize)
             remaining -= dt
+            progressedSeconds += dt
 
             // A. 喷水露珠与玻璃水雾 / 鱼缸藻垢按舒缓长周期渐变（彻底避免刚擦完瞬间再起雾/生藻）
             if instance.mistDewBoostSeconds > 0 {
                 instance.mistDewBoostSeconds = max(0, instance.mistDewBoostSeconds - dt)
             }
             if instance.biome == .aquatic {
-                // 碧波鱼缸：每 ~2 小时才逐渐生满薄藻垢，无需频繁除藻
-                instance.glassFogLevel = min(1.0, instance.glassFogLevel + dt / TerrariumConfig.aquaticAlgaeAccumulationSeconds)
+                // 碧波鱼缸：每 ~2 小时才逐渐生满薄藻垢；摆放青龙造景石组可减缓 20% 藻类滋生
+                let algaeSlowdown = instance.enabledDecorIDs.contains("aquatic_seiryu_stone") ? 0.80 : 1.0
+                instance.glassFogLevel = min(1.0, instance.glassFogLevel + (dt * algaeSlowdown) / TerrariumConfig.aquaticAlgaeAccumulationSeconds)
             } else if instance.humidity >= TerrariumConfig.dewLightHumidityThreshold {
                 // 陆生缸：高湿状态下按 ~45 分钟缓慢起雾（~30-60 分钟清理一次）
                 let targetFog = min(1.0, Double(instance.humidity - 70) / 28.0)
@@ -239,7 +249,8 @@ public enum TerrariumSimulation {
                 let ecoBoost = tankEcoSpeedBoost(for: instance.critters)
                 let slotEfficiency = TerrariumConfig.tankEfficiencyMultiplier(slotIndex: tankSlotIndex)
                 let interval = baseInterval / max(0.35, slotEfficiency * (1.0 + ecoBoost))
-                instance.accumulatedEcoSeconds += dt
+                let offlineDecayFactor = (isOfflineSettlement && progressedSeconds > TerrariumConfig.offlineFullRateSeconds) ? 0.5 : 1.0
+                instance.accumulatedEcoSeconds += dt * offlineDecayFactor
                 if instance.accumulatedEcoSeconds >= interval {
                     let gained = Int(instance.accumulatedEcoSeconds / interval)
                     instance.accumulatedEcoSeconds.formTruncatingRemainder(dividingBy: interval)
@@ -281,13 +292,18 @@ public enum TerrariumSimulation {
                 instance.critters[idx].hunger = min(100.0, instance.critters[idx].hunger + rate * (dt / 3600.0))
 
                 if elapsedSeconds > 120.0 && instance.foodBowlPortions > 0 && instance.critters[idx].hunger >= 55.0 {
+                    let rewardReady = instance.critters[idx].lastFedRewardAt.map {
+                        now.timeIntervalSince($0) >= TerrariumConfig.mealRewardCooldownSeconds
+                    } ?? true
                     instance.foodBowlPortions -= 1
                     instance.critters[idx].hunger = max(0.0, instance.critters[idx].hunger - 45.0)
                     instance.critters[idx].mealsEaten += 1
-                    instance.critters[idx].lastFedRewardAt = now
-                    let mealPts = 1
-                    earnedPoints += mealPts
-                    ecoPoints += mealPts
+                    if rewardReady {
+                        instance.critters[idx].lastFedRewardAt = now
+                        let mealPts = 1
+                        earnedPoints += mealPts
+                        ecoPoints += mealPts
+                    }
 
                     if instance.critters[idx].residency == .visitor {
                         let req = TerrariumConfig.mealsRequiredToSettle(kind: kind, enabledDecorIDs: instance.enabledDecorIDs)
@@ -367,6 +383,13 @@ public enum TerrariumSimulation {
             if fernCount < 1 { return (false, "需卷叶蕨≥1") }
             if instance.humidity < 55 { return (false, "需湿度≥55%") }
             return (true, "条件已达标")
+        case .fireNewt:
+            guard instance.biome == .meadow else { return (false, "仅限温润苔原缸") }
+            if !instance.enabledDecorIDs.contains("meadow_stepping_stones") { return (false, "需摆放溪涧汀步石") }
+            if !instance.enabledDecorIDs.contains("shallow_pool") { return (false, "需摆放溪石浅水洼") }
+            if instance.temperature > 21 { return (false, "需温度≤21°C") }
+            if instance.humidity < 68 { return (false, "需湿度≥68%") }
+            return (true, "条件已达标")
         case .amberBeetle:
             guard instance.biome == .sand else { return (false, "仅限暖阳沙地缸") }
             if !instance.enabledDecorIDs.contains("sand_pebbles") { return (false, "需摆放暖阳卵石滩") }
@@ -386,6 +409,13 @@ public enum TerrariumSimulation {
             if sandPlants < 2 { return (false, "需沙地植物≥2") }
             if instance.temperature < 24 { return (false, "需温度≥24°C") }
             return (true, "条件已达标")
+        case .sandScorpion:
+            guard instance.biome == .sand else { return (false, "仅限暖阳沙地缸") }
+            if !instance.enabledDecorIDs.contains("sand_cairn") { return (false, "需摆放沙漠叠石堆") }
+            if !instance.enabledDecorIDs.contains("sand_rib_arch") { return (false, "需摆放枯木风蚀拱") }
+            if cactusCount < 1 { return (false, "需金琥仙人球≥1") }
+            if instance.temperature < 26 { return (false, "需温度≥26°C") }
+            return (true, "条件已达标")
         case .leafInsect:
             guard instance.biome == .rainforest else { return (false, "仅限热带雨林缸") }
             if !instance.enabledDecorIDs.contains("rainforest_bark") { return (false, "需摆放朽木树洞") }
@@ -404,6 +434,12 @@ public enum TerrariumSimulation {
             if succinctPlants.monsteraCount + succinctPlants.bromeliadCount < 2 { return (false, "需龟背竹/凤梨≥2") }
             if instance.temperature < 25 { return (false, "需温度≥25°C(可开暖灯)") }
             if instance.humidity < 70 { return (false, "需湿度≥70%") }
+            return (true, "条件已达标")
+        case .dartFrog:
+            guard instance.biome == .rainforest else { return (false, "仅限热带雨林缸") }
+            if !instance.enabledDecorIDs.contains("rainforest_bromeliad_stump") { return (false, "需摆放积水凤梨朽桩") }
+            if succinctPlants.bromeliadCount < 1 { return (false, "需积水凤梨≥1") }
+            if instance.humidity < 72 { return (false, "需湿度≥72%") }
             return (true, "条件已达标")
         case .cherryShrimp:
             guard instance.biome == .aquatic else { return (false, "仅限碧波鱼缸") }
@@ -430,6 +466,12 @@ public enum TerrariumSimulation {
             if !instance.enabledDecorIDs.contains("aquatic_bubble_rock") { return (false, "需摆放冒泡火山石") }
             if !instance.enabledDecorIDs.contains("aquatic_castle") { return (false, "需摆放陶瓷躲避屋") }
             if aquaticPlants < 1 { return (false, "需任意水草≥1") }
+            return (true, "条件已达标")
+        case .corydoras:
+            guard instance.biome == .aquatic else { return (false, "仅限碧波鱼缸") }
+            if !instance.enabledDecorIDs.contains("aquatic_bamboo_tube") { return (false, "需摆放莫斯竹筒屋") }
+            if !instance.enabledDecorIDs.contains("aquatic_driftwood") { return (false, "需摆放沉木水草石") }
+            if instance.humidity < 60 { return (false, "需溶氧≥60%") }
             return (true, "条件已达标")
         }
     }
@@ -757,8 +799,27 @@ public enum TerrariumSimulation {
         }
 
         let woodMult = hasWoodBoost ? 1.5 : 1.0
+        var extraSpawnMult = 1.0
+        switch instance.biome {
+        case .meadow:
+            if candidateSpecies == "glow_shroom" && instance.enabledDecorIDs.contains("meadow_mushroom_log") {
+                extraSpawnMult = 1.40
+            }
+        case .sand:
+            if instance.enabledDecorIDs.contains("sand_rib_arch") {
+                extraSpawnMult = 1.25
+            }
+        case .rainforest:
+            if instance.enabledDecorIDs.contains("rainforest_slate_ledge") {
+                extraSpawnMult = 1.30
+            }
+        case .aquatic:
+            if instance.enabledDecorIDs.contains("aquatic_bamboo_tube") {
+                extraSpawnMult = 1.20
+            }
+        }
         let densityFactor = 1.0 - Double(instance.plants.count) / Double(TerrariumConfig.maxPlantsCap)
-        let prob = min(1.0, max(0.0, baseProb * woodMult * (instance.plants.isEmpty ? 1.0 : densityFactor)))
+        let prob = min(1.0, max(0.0, baseProb * woodMult * extraSpawnMult * (instance.plants.isEmpty ? 1.0 : densityFactor)))
 
         guard randomUnit() <= prob, let chosenCoord = pickCoord(freeCoords) else {
             return nil

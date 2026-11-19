@@ -235,8 +235,8 @@ struct PixelStageView: View {
                 }
             }
 
-            // ==================== Pass 2.5: 贴地水洼与卵石滩图层（避免动物沉入底层） ====================
-            for decor in state.decorItems where decor.enabled && (decor.id == "shallow_pool" || decor.id == "sand_pebbles") {
+            // ==================== Pass 2.5: 贴地水洼、卵石滩与汀步石图层（避免动物沉入底层） ====================
+            for decor in state.decorItems where decor.enabled && (decor.id == "shallow_pool" || decor.id == "sand_pebbles" || decor.id == "meadow_stepping_stones") {
                 let gp = TerrariumConfig.anchorGridPos(for: decor.id, decorOrigins: state.decorOrigins)
                 let screenPos = TerrariumConfig.isoToScreen(gx: gp.gx, gy: gp.gy)
                 if decor.id == "shallow_pool" {
@@ -246,62 +246,101 @@ struct PixelStageView: View {
                     } else {
                         poolFrame = state.isSleeping ? 0 : ((animator.tick / 7) % 2)
                     }
-                    drawSheetFrame(in: &context, sheet: "env_shallow_pool", frameIndex: poolFrame, frameSize: CGSize(width: 40, height: 22), screenPos: screenPos, anchor: CGPoint(x: 20, y: 12))
+                    drawSheetFrame(in: &context, sheet: "env_shallow_pool", frameIndex: poolFrame, frameSize: CGSize(width: 44, height: 24), screenPos: screenPos, anchor: CGPoint(x: 22, y: 13))
+                } else if decor.id == "sand_pebbles" {
+                    drawSheetFrame(in: &context, sheet: "env_pebbles", frameIndex: 1, frameSize: CGSize(width: 28, height: 16), screenPos: screenPos, anchor: CGPoint(x: 14, y: 9))
                 } else {
-                    drawSheetFrame(in: &context, sheet: "env_pebbles", frameIndex: 1, frameSize: CGSize(width: 22, height: 12), screenPos: screenPos, anchor: CGPoint(x: 11, y: 7))
+                    drawSheetFrame(in: &context, sheet: "env_meadow_stepping_stones", frameIndex: 0, frameSize: CGSize(width: 28, height: 16), screenPos: screenPos, anchor: CGPoint(x: 14, y: 9))
                 }
             }
 
-            // ==================== Pass 3: 统一 2:1 等距接触阴影 ====================
-            for decor in state.decorItems where decor.enabled && decor.id != "shallow_pool" && decor.id != "sand_pebbles" {
-                let gp = TerrariumConfig.anchorGridPos(for: decor.id, decorOrigins: state.decorOrigins)
-                let pt = TerrariumConfig.isoToScreen(gx: gp.gx, gy: gp.gy)
-                let dims: (Double, Double) = {
-                    switch decor.id {
-                    case "sand_rock": return (38, 17)
-                    case "driftwood": return (40, 16)
-                    case "sand_wood", "rainforest_vine", "aquatic_driftwood": return (34, 14)
-                    case "rainforest_waterfall", "aquatic_bubble_rock": return (34, 14)
-                    case "boulder", "rainforest_bark", "aquatic_castle": return (22, 11)
-                    default: return (18, 8)
+            // ==================== Pass 3: 统一 2:1 等距接触阴影（严格裁剪于缸底菱形内部，绝不穿透缸壁） ====================
+            let f0 = TerrariumConfig.isoToScreen(gx: 0, gy: 0)
+            let f1 = TerrariumConfig.isoToScreen(gx: Double(TerrariumConfig.gridCols), gy: 0)
+            let f2 = TerrariumConfig.isoToScreen(gx: Double(TerrariumConfig.gridCols), gy: Double(TerrariumConfig.gridRows))
+            let f3 = TerrariumConfig.isoToScreen(gx: 0, gy: Double(TerrariumConfig.gridRows))
+            var floorClipPath = Path()
+            floorClipPath.move(to: CGPoint(x: f0.x * scale, y: f0.y * scale))
+            floorClipPath.addLine(to: CGPoint(x: f1.x * scale, y: f1.y * scale))
+            floorClipPath.addLine(to: CGPoint(x: f2.x * scale, y: f2.y * scale))
+            floorClipPath.addLine(to: CGPoint(x: f3.x * scale, y: f3.y * scale))
+            floorClipPath.closeSubpath()
+
+            context.drawLayer { shadowCtx in
+                shadowCtx.clip(to: floorClipPath)
+                func drawClippedShadow(center: CGPoint, width: Double, height: Double, gz: Double = 0.0) {
+                    let liftFade = max(0.28, 1.0 - gz * 0.03)
+                    let shrink = max(0.55, 1.0 - gz * 0.015)
+                    let w = width * shrink
+                    let h = height * shrink
+                    let rect = CGRect(
+                        x: (center.x - w * 0.5) * scale,
+                        y: (center.y - h * 0.5) * scale,
+                        width: w * scale,
+                        height: h * scale
+                    )
+                    shadowCtx.fill(Path(ellipseIn: rect), with: .color(Color.black.opacity(0.26 * liftFade)))
+                }
+
+                for decor in state.decorItems where decor.enabled && decor.id != "shallow_pool" && decor.id != "sand_pebbles" && decor.id != "meadow_stepping_stones" {
+                    let gp = TerrariumConfig.anchorGridPos(for: decor.id, decorOrigins: state.decorOrigins)
+                    let pt = TerrariumConfig.isoToScreen(gx: gp.gx, gy: gp.gy)
+                    let dims: (Double, Double) = {
+                        switch decor.id {
+                        case "sand_rock": return (42, 19)
+                        case "driftwood", "sand_wood", "rainforest_vine", "aquatic_driftwood": return (44, 18)
+                        case "rainforest_waterfall", "aquatic_bubble_rock": return (38, 16)
+                        case "boulder", "rainforest_bark", "aquatic_castle": return (28, 13)
+                        case "sand_rib_arch", "rainforest_slate_ledge", "aquatic_seiryu_stone": return (24, 11)
+                        default: return (18, 8)
+                        }
+                    }()
+                    drawClippedShadow(center: pt, width: dims.0, height: dims.1)
+                }
+
+                let bowlPt = TerrariumConfig.isoToScreen(
+                    gx: Double(TerrariumConfig.foodBowlCoord.col) + 0.5,
+                    gy: Double(TerrariumConfig.foodBowlCoord.row) + 0.5
+                )
+                if state.currentBiome != .aquatic {
+                    drawClippedShadow(center: bowlPt, width: 16, height: 7)
+                }
+
+                for plant in state.plants where plant.speciesID != "moss" && plant.speciesID != "lotus" {
+                    let pt = TerrariumConfig.isoToScreen(gx: Double(plant.coord.col) + 0.5, gy: Double(plant.coord.row) + 0.5)
+                    if plant.stage == .sprout {
+                        drawClippedShadow(center: pt, width: 8, height: 4)
+                    } else {
+                        let dims: (Double, Double) = {
+                            switch plant.speciesID {
+                            case "fern", "monstera": return (20, 8)
+                            case "glow_shroom", "red_shroom", "bromeliad", "orchid", "anubias": return (14, 6)
+                            default: return (12, 6)
+                            }
+                        }()
+                        drawClippedShadow(center: pt, width: dims.0, height: dims.1)
                     }
-                }()
-                drawIsoShadow(center: pt, width: dims.0, height: dims.1)
+                }
+
+                for c in animator.critterRuntimes {
+                    let pt = TerrariumConfig.isoToScreen(gx: c.gx, gy: c.gy, gz: 0)
+                    let dims: (Double, Double) = (c.kind == .treeFrog || c.kind == .sandGecko || c.kind == .chameleon || c.kind == .dartFrog || c.kind == .sandScorpion) ? (15, 7) : (11, 5)
+                    drawClippedShadow(center: pt, width: dims.0, height: dims.1, gz: c.gz)
+                }
+            }
+
+            // 睡莲位于水面 (gz = 38)，独立绘制于水面高度投影
+            for plant in state.plants where plant.speciesID == "lotus" {
+                let pt = TerrariumConfig.isoToScreen(gx: Double(plant.coord.col) + 0.5, gy: Double(plant.coord.row) + 0.5)
+                let w: Double = (plant.stage == .sprout) ? 10 : 15
+                let h: Double = (plant.stage == .sprout) ? 5 : 7
+                drawIsoShadow(center: pt, width: w, height: h, gz: TerrariumConfig.waterSurfaceGZ)
             }
 
             let bowlPos = TerrariumConfig.isoToScreen(
                 gx: Double(TerrariumConfig.foodBowlCoord.col) + 0.5,
                 gy: Double(TerrariumConfig.foodBowlCoord.row) + 0.5
             )
-            if state.currentBiome != .aquatic {
-                drawIsoShadow(center: bowlPos, width: 16, height: 7)
-            }
-
-            for plant in state.plants where plant.speciesID != "moss" {
-                let pt = TerrariumConfig.isoToScreen(gx: Double(plant.coord.col) + 0.5, gy: Double(plant.coord.row) + 0.5)
-                if plant.speciesID == "lotus" {
-                    let w: Double = (plant.stage == .sprout) ? 10 : 15
-                    let h: Double = (plant.stage == .sprout) ? 5 : 7
-                    drawIsoShadow(center: pt, width: w, height: h, gz: TerrariumConfig.waterSurfaceGZ)
-                } else if plant.stage == .sprout {
-                    drawIsoShadow(center: pt, width: 8, height: 4)
-                } else {
-                    let dims: (Double, Double) = {
-                        switch plant.speciesID {
-                        case "fern", "monstera": return (20, 8)
-                        case "glow_shroom", "red_shroom", "bromeliad", "orchid", "anubias": return (14, 6)
-                        default: return (12, 6)
-                        }
-                    }()
-                    drawIsoShadow(center: pt, width: dims.0, height: dims.1)
-                }
-            }
-
-            for c in animator.critterRuntimes {
-                let pt = TerrariumConfig.isoToScreen(gx: c.gx, gy: c.gy, gz: 0)
-                let dims: (Double, Double) = (c.kind == .treeFrog || c.kind == .sandGecko || c.kind == .chameleon) ? (15, 7) : (11, 5)
-                drawIsoShadow(center: pt, width: dims.0, height: dims.1, gz: c.gz)
-            }
 
             // ==================== Pass 4: Y-Sort 严格前后遮挡绘制层 ====================
             var sortables: [RenderSortable] = []
@@ -350,27 +389,41 @@ struct PixelStageView: View {
 
                 switch decor.id {
                 case "driftwood":
-                    appendSlicedDecor(sheet: "env_driftwood", frameSize: CGSize(width: 52, height: 32), anchor: CGPoint(x: 26, y: 20), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                    appendSlicedDecor(sheet: "env_driftwood", frameSize: CGSize(width: 56, height: 38), anchor: CGPoint(x: 28, y: 24), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
                 case "boulder":
-                    appendSlicedDecor(sheet: "env_boulder", frameSize: CGSize(width: 30, height: 22), anchor: CGPoint(x: 15, y: 16), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                    appendSlicedDecor(sheet: "env_boulder", frameSize: CGSize(width: 40, height: 30), anchor: CGPoint(x: 20, y: 21), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
                 case "sand_rock":
-                    appendSlicedDecor(sheet: "env_sand_rock", frameSize: CGSize(width: 46, height: 34), anchor: CGPoint(x: 23, y: 24), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                    appendSlicedDecor(sheet: "env_sand_rock", frameSize: CGSize(width: 50, height: 40), anchor: CGPoint(x: 25, y: 28), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
                 case "sand_wood":
-                    appendSlicedDecor(sheet: "env_sand_wood", frameSize: CGSize(width: 38, height: 24), anchor: CGPoint(x: 19, y: 15), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                    appendSlicedDecor(sheet: "env_sand_wood", frameSize: CGSize(width: 56, height: 38), anchor: CGPoint(x: 28, y: 24), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
                 case "rainforest_vine":
-                    appendSlicedDecor(sheet: "env_rainforest_vine", frameSize: CGSize(width: 48, height: 34), anchor: CGPoint(x: 24, y: 22), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                    appendSlicedDecor(sheet: "env_rainforest_vine", frameSize: CGSize(width: 56, height: 38), anchor: CGPoint(x: 28, y: 24), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
                 case "rainforest_waterfall":
                     let wfFrame = state.isSleeping ? 0 : ((animator.tick / 5) % 3)
-                    appendSlicedDecor(sheet: "env_rainforest_waterfall", frameIndex: wfFrame, frameSize: CGSize(width: 40, height: 30), anchor: CGPoint(x: 20, y: 21), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                    appendSlicedDecor(sheet: "env_rainforest_waterfall", frameIndex: wfFrame, frameSize: CGSize(width: 48, height: 38), anchor: CGPoint(x: 24, y: 27), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
                 case "rainforest_bark":
-                    appendSlicedDecor(sheet: "env_rainforest_bark", frameSize: CGSize(width: 30, height: 22), anchor: CGPoint(x: 15, y: 16), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                    appendSlicedDecor(sheet: "env_rainforest_bark", frameSize: CGSize(width: 40, height: 30), anchor: CGPoint(x: 20, y: 21), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
                 case "aquatic_bubble_rock":
                     let brFrame = state.isSleeping ? 0 : ((animator.tick / 5) % 3)
-                    appendSlicedDecor(sheet: "env_aquatic_bubble_rock", frameIndex: brFrame, frameSize: CGSize(width: 38, height: 30), anchor: CGPoint(x: 19, y: 21), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                    appendSlicedDecor(sheet: "env_aquatic_bubble_rock", frameIndex: brFrame, frameSize: CGSize(width: 44, height: 36), anchor: CGPoint(x: 22, y: 25), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
                 case "aquatic_driftwood":
-                    appendSlicedDecor(sheet: "env_aquatic_driftwood", frameSize: CGSize(width: 48, height: 32), anchor: CGPoint(x: 24, y: 20), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                    appendSlicedDecor(sheet: "env_aquatic_driftwood", frameSize: CGSize(width: 56, height: 38), anchor: CGPoint(x: 28, y: 24), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
                 case "aquatic_castle":
-                    appendSlicedDecor(sheet: "env_aquatic_castle", frameSize: CGSize(width: 32, height: 24), anchor: CGPoint(x: 16, y: 16), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                    appendSlicedDecor(sheet: "env_aquatic_castle", frameSize: CGSize(width: 42, height: 32), anchor: CGPoint(x: 21, y: 22), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                case "meadow_mushroom_log":
+                    appendSlicedDecor(sheet: "env_meadow_mushroom_log", frameSize: CGSize(width: 22, height: 24), anchor: CGPoint(x: 11, y: 18), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                case "sand_cairn":
+                    appendSlicedDecor(sheet: "env_sand_cairn", frameSize: CGSize(width: 22, height: 26), anchor: CGPoint(x: 11, y: 20), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                case "sand_rib_arch":
+                    appendSlicedDecor(sheet: "env_sand_rib_arch", frameSize: CGSize(width: 30, height: 22), anchor: CGPoint(x: 15, y: 16), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                case "rainforest_bromeliad_stump":
+                    appendSlicedDecor(sheet: "env_rainforest_bromeliad_stump", frameSize: CGSize(width: 24, height: 26), anchor: CGPoint(x: 12, y: 20), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                case "rainforest_slate_ledge":
+                    appendSlicedDecor(sheet: "env_rainforest_slate_ledge", frameSize: CGSize(width: 30, height: 24), anchor: CGPoint(x: 15, y: 18), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                case "aquatic_seiryu_stone":
+                    appendSlicedDecor(sheet: "env_aquatic_seiryu_stone", frameSize: CGSize(width: 30, height: 26), anchor: CGPoint(x: 15, y: 20), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                case "aquatic_bamboo_tube":
+                    appendSlicedDecor(sheet: "env_aquatic_bamboo_tube", frameSize: CGSize(width: 32, height: 28), anchor: CGPoint(x: 16, y: 23), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
                 default:
                     break
                 }
@@ -400,59 +453,63 @@ struct PixelStageView: View {
                 sortables.append(RenderSortable(sortDepth: depth) { ctx in
                     let isSprout = (plant.stage == .sprout)
                     let isWilting = (plant.stage == .wilting || plant.stage == .withered)
+                    // 同种植物依据坐标哈希决定水平镜像与动画相位错峰，呈现多样自然形态
+                    let variantHash = abs(plant.coord.col * 31 + plant.coord.row * 17)
+                    let flipPlant = (variantHash % 2 == 1)
+                    let phaseShift = variantHash % 3
 
                     switch plant.speciesID {
                     case "fern":
-                        let fIdx = isSprout ? 3 : (isWilting ? 4 : (state.isSleeping ? 0 : ((animator.tick / 7 + idx) % 3)))
-                        drawSheetFrame(in: &ctx, sheet: "plant_fern_sheet", frameIndex: fIdx, frameSize: CGSize(width: 32, height: 32), screenPos: screenPos, anchor: CGPoint(x: 16, y: 26))
+                        let fIdx = isSprout ? 3 : (isWilting ? 4 : (state.isSleeping ? 0 : ((animator.tick / 7 + idx + phaseShift) % 3)))
+                        drawSheetFrame(in: &ctx, sheet: "plant_fern_sheet", frameIndex: fIdx, frameSize: CGSize(width: 32, height: 32), screenPos: screenPos, anchor: CGPoint(x: 16, y: 26), flippedX: flipPlant)
                     case "clover":
-                        let fIdx = isSprout ? 2 : (isWilting ? 3 : (state.isSleeping ? 0 : ((animator.tick / 9 + idx) % 2)))
-                        drawSheetFrame(in: &ctx, sheet: "plant_clover_sheet", frameIndex: fIdx, frameSize: CGSize(width: 18, height: 14), screenPos: screenPos, anchor: CGPoint(x: 9, y: 11))
+                        let fIdx = isSprout ? 2 : (isWilting ? 3 : (state.isSleeping ? 0 : ((animator.tick / 9 + idx + phaseShift) % 2)))
+                        drawSheetFrame(in: &ctx, sheet: "plant_clover_sheet", frameIndex: fIdx, frameSize: CGSize(width: 18, height: 14), screenPos: screenPos, anchor: CGPoint(x: 9, y: 11), flippedX: flipPlant)
                     case "moss":
-                        let fIdx = isSprout ? 2 : (isWilting ? 3 : (plant.dewLevel > 0 ? 1 : 0))
-                        drawSheetFrame(in: &ctx, sheet: "plant_moss_clump", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 12), screenPos: screenPos, anchor: CGPoint(x: 10, y: 9))
+                        let fIdx = isSprout ? 2 : (isWilting ? 3 : ((plant.dewLevel > 0 || phaseShift == 1) ? 1 : 0))
+                        drawSheetFrame(in: &ctx, sheet: "plant_moss_clump", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 12), screenPos: screenPos, anchor: CGPoint(x: 10, y: 9), flippedX: flipPlant)
                     case "glow_shroom":
-                        let fIdx = isSprout ? 3 : (isWilting ? 4 : (state.isSleeping ? 0 : ((animator.tick / 6 + idx) % 3)))
-                        drawSheetFrame(in: &ctx, sheet: "plant_glow_shroom_sheet", frameIndex: fIdx, frameSize: CGSize(width: 16, height: 16), screenPos: screenPos, anchor: CGPoint(x: 8, y: 13))
+                        let fIdx = isSprout ? 3 : (isWilting ? 4 : (state.isSleeping ? 0 : ((animator.tick / 6 + idx + phaseShift) % 3)))
+                        drawSheetFrame(in: &ctx, sheet: "plant_glow_shroom_sheet", frameIndex: fIdx, frameSize: CGSize(width: 16, height: 16), screenPos: screenPos, anchor: CGPoint(x: 8, y: 13), flippedX: flipPlant)
                     case "succulent":
-                        let fIdx = isSprout ? 2 : (isWilting ? 3 : (state.humidity >= 50 ? 1 : 0))
-                        drawSheetFrame(in: &ctx, sheet: "plant_succulent_sheet", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 16), screenPos: screenPos, anchor: CGPoint(x: 10, y: 12))
+                        let fIdx = isSprout ? 2 : (isWilting ? 3 : ((state.humidity >= 50 || phaseShift == 1) ? 1 : 0))
+                        drawSheetFrame(in: &ctx, sheet: "plant_succulent_sheet", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 16), screenPos: screenPos, anchor: CGPoint(x: 10, y: 12), flippedX: flipPlant)
                     case "cactus":
                         let fIdx = isSprout ? 2 : (isWilting ? 3 : (plant.stage == .mature || plant.stage == .lushDew ? 1 : 0))
-                        drawSheetFrame(in: &ctx, sheet: "plant_cactus_sheet", frameIndex: fIdx, frameSize: CGSize(width: 18, height: 20), screenPos: screenPos, anchor: CGPoint(x: 9, y: 15))
+                        drawSheetFrame(in: &ctx, sheet: "plant_cactus_sheet", frameIndex: fIdx, frameSize: CGSize(width: 18, height: 20), screenPos: screenPos, anchor: CGPoint(x: 9, y: 15), flippedX: flipPlant)
                     case "aloe":
-                        let fIdx = isSprout ? 2 : (isWilting ? 3 : (state.humidity >= 40 ? 1 : 0))
-                        drawSheetFrame(in: &ctx, sheet: "plant_aloe_sheet", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 18), screenPos: screenPos, anchor: CGPoint(x: 10, y: 13))
+                        let fIdx = isSprout ? 2 : (isWilting ? 3 : ((state.humidity >= 40 || phaseShift == 1) ? 1 : 0))
+                        drawSheetFrame(in: &ctx, sheet: "plant_aloe_sheet", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 18), screenPos: screenPos, anchor: CGPoint(x: 10, y: 13), flippedX: flipPlant)
                     case "monstera":
-                        let fIdx = isSprout ? 3 : (isWilting ? 4 : (state.isSleeping ? 0 : ((animator.tick / 8 + idx) % 3)))
-                        drawSheetFrame(in: &ctx, sheet: "plant_monstera_sheet", frameIndex: fIdx, frameSize: CGSize(width: 28, height: 28), screenPos: screenPos, anchor: CGPoint(x: 14, y: 22))
+                        let fIdx = isSprout ? 3 : (isWilting ? 4 : (state.isSleeping ? 0 : ((animator.tick / 8 + idx + phaseShift) % 3)))
+                        drawSheetFrame(in: &ctx, sheet: "plant_monstera_sheet", frameIndex: fIdx, frameSize: CGSize(width: 28, height: 28), screenPos: screenPos, anchor: CGPoint(x: 14, y: 22), flippedX: flipPlant)
                     case "bromeliad":
-                        let fIdx = isSprout ? 2 : (isWilting ? 3 : (plant.dewLevel > 0 ? 1 : 0))
-                        drawSheetFrame(in: &ctx, sheet: "plant_bromeliad_sheet", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 20), screenPos: screenPos, anchor: CGPoint(x: 10, y: 15))
+                        let fIdx = isSprout ? 2 : (isWilting ? 3 : ((plant.dewLevel > 0 || phaseShift == 1) ? 1 : 0))
+                        drawSheetFrame(in: &ctx, sheet: "plant_bromeliad_sheet", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 20), screenPos: screenPos, anchor: CGPoint(x: 10, y: 15), flippedX: flipPlant)
                     case "orchid":
-                        let fIdx = isSprout ? 2 : (isWilting ? 3 : (plant.dewLevel > 0 ? 1 : 0))
-                        drawSheetFrame(in: &ctx, sheet: "plant_orchid_sheet", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 22), screenPos: screenPos, anchor: CGPoint(x: 10, y: 17))
+                        let fIdx = isSprout ? 2 : (isWilting ? 3 : ((plant.dewLevel > 0 || phaseShift == 1) ? 1 : 0))
+                        drawSheetFrame(in: &ctx, sheet: "plant_orchid_sheet", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 22), screenPos: screenPos, anchor: CGPoint(x: 10, y: 17), flippedX: flipPlant)
                     case "marimo":
-                        let fIdx = isSprout ? 2 : (isWilting ? 3 : (state.humidity >= 65 ? 1 : 0))
-                        drawSheetFrame(in: &ctx, sheet: "plant_marimo_sheet", frameIndex: fIdx, frameSize: CGSize(width: 18, height: 14), screenPos: screenPos, anchor: CGPoint(x: 9, y: 10))
+                        let fIdx = isSprout ? 2 : (isWilting ? 3 : ((state.humidity >= 65 || phaseShift == 1) ? 1 : 0))
+                        drawSheetFrame(in: &ctx, sheet: "plant_marimo_sheet", frameIndex: fIdx, frameSize: CGSize(width: 18, height: 14), screenPos: screenPos, anchor: CGPoint(x: 9, y: 10), flippedX: flipPlant)
                     case "anubias":
-                        let fIdx = isSprout ? 2 : (isWilting ? 3 : (state.isSleeping ? 0 : ((animator.tick / 10 + idx) % 2)))
-                        drawSheetFrame(in: &ctx, sheet: "plant_anubias_sheet", frameIndex: fIdx, frameSize: CGSize(width: 22, height: 20), screenPos: screenPos, anchor: CGPoint(x: 11, y: 16))
+                        let fIdx = isSprout ? 2 : (isWilting ? 3 : (state.isSleeping ? 0 : ((animator.tick / 10 + idx + phaseShift) % 2)))
+                        drawSheetFrame(in: &ctx, sheet: "plant_anubias_sheet", frameIndex: fIdx, frameSize: CGSize(width: 22, height: 20), screenPos: screenPos, anchor: CGPoint(x: 11, y: 16), flippedX: flipPlant)
                     case "lotus":
                         // 仅在幼苗期绘制半透明水下细芽茎；成熟期与枯萎期不再保留水下茎与根部，保持水体通透美观
                         if isSprout {
                             let stemFrame = state.isSleeping ? 0 : ((animator.tick / 12 + idx) % 2)
                             ctx.opacity = 0.50
-                            drawSheetFrame(in: &ctx, sheet: "plant_lotus_stem", frameIndex: stemFrame, frameSize: CGSize(width: 8, height: 40), screenPos: screenPos, anchor: CGPoint(x: 4, y: 38))
+                            drawSheetFrame(in: &ctx, sheet: "plant_lotus_stem", frameIndex: stemFrame, frameSize: CGSize(width: 8, height: 40), screenPos: screenPos, anchor: CGPoint(x: 4, y: 38), flippedX: flipPlant)
                             ctx.opacity = 1.0
                         }
                     default:
-                        let fIdx = isSprout ? 3 : (isWilting ? 4 : (state.isSleeping ? 0 : ((animator.tick / 8 + idx) % 3)))
-                        drawSheetFrame(in: &ctx, sheet: "plant_red_shroom_sheet", frameIndex: fIdx, frameSize: CGSize(width: 16, height: 16), screenPos: screenPos, anchor: CGPoint(x: 8, y: 13))
+                        let fIdx = isSprout ? 3 : (isWilting ? 4 : (state.isSleeping ? 0 : ((animator.tick / 8 + idx + phaseShift) % 3)))
+                        drawSheetFrame(in: &ctx, sheet: "plant_red_shroom_sheet", frameIndex: fIdx, frameSize: CGSize(width: 16, height: 16), screenPos: screenPos, anchor: CGPoint(x: 8, y: 13), flippedX: flipPlant)
                     }
 
-                    // 湿度视觉反馈：缓慢由小变大再滴落的凝露动画（每 14 秒一轮，低频舒缓）
-                    if plant.speciesID != "lotus", plant.dewLevel >= 1 && !isWilting {
+                    // 湿度视觉反馈：幼苗期尚未长成叶冠不显示高处凝露滴落动画，仅成熟大植株显示
+                    if plant.speciesID != "lotus", !isSprout, plant.dewLevel >= 1 && !isWilting {
                         let dewOffsetY: Double = (plant.speciesID == "fern" || plant.speciesID == "monstera") ? -15.0 : -6.0
                         if plant.dewLevel == 2 && !state.isSleeping {
                             let dropPhase = (animator.tick + idx * 59) % 210
@@ -545,6 +602,14 @@ struct PixelStageView: View {
                         drawSheetFrame(in: &ctx, sheet: "char_betta_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 30, height: 22), screenPos: screenPos, anchor: CGPoint(x: 17, y: 12), flippedX: !c.facingRight)
                     case .crayfish:
                         drawSheetFrame(in: &ctx, sheet: "char_crayfish_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 24, height: 16), screenPos: screenPos, anchor: CGPoint(x: 12, y: 12), flippedX: !c.facingRight)
+                    case .fireNewt:
+                        drawSheetFrame(in: &ctx, sheet: "char_fire_newt_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 22, height: 16), screenPos: screenPos, anchor: CGPoint(x: 11, y: 12), flippedX: !c.facingRight)
+                    case .sandScorpion:
+                        drawSheetFrame(in: &ctx, sheet: "char_sand_scorpion_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 22, height: 16), screenPos: screenPos, anchor: CGPoint(x: 11, y: 12), flippedX: !c.facingRight)
+                    case .dartFrog:
+                        drawSheetFrame(in: &ctx, sheet: "char_dart_frog_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 20, height: 18), screenPos: screenPos, anchor: CGPoint(x: 10, y: 14), flippedX: !c.facingRight)
+                    case .corydoras:
+                        drawSheetFrame(in: &ctx, sheet: "char_corydoras_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 18, height: 14), screenPos: screenPos, anchor: CGPoint(x: 9, y: 10), flippedX: !c.facingRight)
                     }
                 })
             }
@@ -901,7 +966,7 @@ struct PixelStageView: View {
             case .sleep: return 10 + ((globalTick / 10) % 2)
             }
 
-        case .bettaFish, .crayfish:
+        case .bettaFish, .crayfish, .fireNewt, .sandScorpion, .dartFrog, .corydoras:
             switch c.behavior {
             case .idle, .petted: return (globalTick / 6) % 3
             case .patrol, .seekingFood: return 3 + ((globalTick / 3) % 4)

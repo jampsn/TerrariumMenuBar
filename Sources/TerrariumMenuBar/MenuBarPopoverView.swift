@@ -70,7 +70,7 @@ struct MenuBarPopoverView: View {
             .background(bgHeader)
             .overlay(Rectangle().frame(height: 2).foregroundColor(borderCol), alignment: .bottom)
 
-            // 主内容区
+            // 主内容区（固定高度确保切换 Tab 时 Popover 始终紧贴 Menubar 下方、不上下跳动）
             Group {
                 switch state.currentTab {
                 case .terrarium:
@@ -84,6 +84,7 @@ struct MenuBarPopoverView: View {
                 }
             }
             .padding(12)
+            .frame(height: 540, alignment: .top)
 
             // 底部状态栏
             HStack {
@@ -303,8 +304,9 @@ struct MenuBarPopoverView: View {
                     .foregroundColor(state.isMovingPlant ? .black : .white)
                     .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
 
-                    Button("修剪 +1点") {
-                        state.pruneSelectedPlant()
+                    Button(selPlant.stage == .sprout ? "移除幼苗(0点)" : "修剪(+1点)") {
+                        state.isMovingPlant = false
+                        state.isConfirmingPrunePlant = true
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
@@ -325,6 +327,42 @@ struct MenuBarPopoverView: View {
                 .padding(.vertical, 5)
                 .background(bgHeader)
                 .overlay(Rectangle().stroke(accentGreen.opacity(0.6), lineWidth: 1))
+
+                if state.isConfirmingPrunePlant {
+                    let plantName = TerrariumState.displayName(forPlantSpecies: selPlant.speciesID)
+                    let isSprout = (selPlant.stage == .sprout)
+                    HStack(spacing: 6) {
+                        Text(isSprout ? "⚠️ 确认移除幼苗「\(plantName)」？幼苗修剪不返还生态点（+0点）" : "✂️ 确认修剪「\(plantName)」？将移除植株并返还 +1 生态点")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(isSprout ? Color(red: 0.99, green: 0.80, blue: 0.76) : adminAmber)
+                            .lineLimit(2)
+                        Spacer()
+                        Button(isSprout ? "确认移除" : "确认 +1点") {
+                            state.pruneSelectedPlant()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(isSprout ? Color.red.opacity(0.8) : accentGreen)
+                        .foregroundColor(.white)
+                        .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+
+                        Button("取消") {
+                            state.isConfirmingPrunePlant = false
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 10, design: .monospaced))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(bgCard)
+                        .foregroundColor(textMuted)
+                        .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                    }
+                    .padding(6)
+                    .background((isSprout ? Color.red : adminAmber).opacity(0.14))
+                    .overlay(Rectangle().stroke((isSprout ? Color.red : adminAmber).opacity(0.45), lineWidth: 1))
+                }
             } else if let selDecor = state.selectedDecorItem {
                 let isMovingThis = (state.movingDecorID == selDecor.id)
                 let dims = TerrariumConfig.decorDimensions(for: selDecor.id)
@@ -461,10 +499,11 @@ struct MenuBarPopoverView: View {
                             miniBtn("+", action: { state.adjustTemp(1) })
                         }
                     }
+                    .frame(minHeight: 16)
                 }
                 .font(.system(size: 11, design: .monospaced))
                 .padding(6)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .background(bgCard)
                 .overlay(Rectangle().stroke(borderCol, lineWidth: 1.5))
 
@@ -476,7 +515,7 @@ struct MenuBarPopoverView: View {
                     onMinus: { state.adjustHumidity(-5) },
                     onPlus: { state.adjustHumidity(5) }
                 )
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 VStack(spacing: 3) {
                     HStack(spacing: 3) {
                         Text(state.currentBiome == .aquatic ? "浮圈" : "食盆")
@@ -501,12 +540,51 @@ struct MenuBarPopoverView: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     }
+                    .frame(minHeight: 16)
                 }
                 .font(.system(size: 11, design: .monospaced))
                 .padding(6)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .background(bgCard)
                 .overlay(Rectangle().stroke(borderCol, lineWidth: 1.5))
+            }
+            .fixedSize(horizontal: false, vertical: true)
+
+            if let pendingThermal = state.pendingPurchaseThermalMode {
+                let isHeat = (pendingThermal == .heating)
+                let equipName = isHeat ? (state.currentBiome == .aquatic ? "恒温加热棒" : "夹缸晒背灯") : "夹缸静音降温扇"
+                let cost = isHeat ? TerrariumConfig.heatLampCost : TerrariumConfig.coolingFanCost
+                HStack(spacing: 6) {
+                    Text("🔌 消耗 \(cost) 点购置并安装「\(equipName)」？（安装后可随时免费开关）")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(textMain)
+                        .lineLimit(2)
+                    Spacer()
+                    Button("确认 \(cost)点") {
+                        state.confirmPurchaseThermalEquipment()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(adminAmber)
+                    .foregroundColor(.black)
+                    .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+
+                    Button("取消") {
+                        state.cancelPurchaseThermalEquipment()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10, design: .monospaced))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(bgCard)
+                    .foregroundColor(textMuted)
+                    .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                }
+                .padding(6)
+                .background(adminAmber.opacity(0.14))
+                .overlay(Rectangle().stroke(adminAmber.opacity(0.45), lineWidth: 1))
             }
 
             // 4 个自然演进核心交互按钮
@@ -594,6 +672,47 @@ struct MenuBarPopoverView: View {
                             .background(bgCard).foregroundColor(textMuted)
                             .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
                     }
+                    HStack(spacing: 4) {
+                        Text("⏩ 加速:")
+                            .font(.system(size: 9.5, design: .monospaced))
+                            .foregroundColor(adminAmber)
+                        ForEach([1.0, 10.0, 60.0, 300.0], id: \.self) { scale in
+                            Button("\(Int(scale))x") {
+                                state.setAdminTimeScale(scale)
+                            }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 9.5, weight: state.adminTimeScale == scale ? .bold : .regular, design: .monospaced))
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(state.adminTimeScale == scale ? adminAmber : bgCard)
+                            .foregroundColor(state.adminTimeScale == scale ? .black : textMain)
+                            .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                        }
+                        Spacer()
+                        Button("+10m") { state.fastForwardDebug(seconds: 600) }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 9.5, design: .monospaced))
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(bgCard).foregroundColor(textMain)
+                            .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                        Button("+1h") { state.fastForwardDebug(seconds: 3600) }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 9.5, design: .monospaced))
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(bgCard).foregroundColor(textMain)
+                            .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                        Button("+8h") { state.fastForwardDebug(seconds: 8 * 3600) }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(bgCard).foregroundColor(adminAmber)
+                            .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                    }
+                    if state.adminSimulatedElapsedSeconds > 0 {
+                        let mins = Int(state.adminSimulatedElapsedSeconds / 60.0)
+                        Text("虚拟时钟已推进: \(mins >= 60 ? "\(mins / 60)h \(mins % 60)m" : "\(mins)m")（不影响真实存档时间）")
+                            .font(.system(size: 9.5, design: .monospaced))
+                            .foregroundColor(textMuted)
+                    }
                 }
                 .padding(6)
                 .background(adminAmber.opacity(0.08))
@@ -617,7 +736,7 @@ struct MenuBarPopoverView: View {
                 Text(value).bold().foregroundColor(textMain)
             }
             HStack {
-                Text(hint).font(.system(size: 10, design: .monospaced)).foregroundColor(textMuted)
+                Text(hint).font(.system(size: 9.5, design: .monospaced)).foregroundColor(textMuted).lineLimit(1)
                 Spacer()
                 if allowAdminButtons {
                     HStack(spacing: 4) {
@@ -626,6 +745,7 @@ struct MenuBarPopoverView: View {
                     }
                 }
             }
+            .frame(minHeight: 16)
         }
         .font(.system(size: 11, design: .monospaced))
         .padding(6)
@@ -776,21 +896,15 @@ struct MenuBarPopoverView: View {
                         .font(.system(size: 11.5, weight: .bold, design: .monospaced))
                         .foregroundColor(textMain)
                     Spacer()
-                    Button("重置存档(新开局)") {
-                        state.resetSaveData()
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(textMuted.opacity(0.85))
                 }
 
                 ForEach(state.decorItems) { item in
                     let frameSize: CGSize? = {
                         switch item.id {
-                        case "shallow_pool": return CGSize(width: 40, height: 22)
-                        case "sand_pebbles": return CGSize(width: 22, height: 12)
-                        case "rainforest_waterfall": return CGSize(width: 40, height: 30)
-                        case "aquatic_bubble_rock": return CGSize(width: 38, height: 30)
+                        case "shallow_pool": return CGSize(width: 44, height: 24)
+                        case "sand_pebbles": return CGSize(width: 28, height: 16)
+                        case "rainforest_waterfall": return CGSize(width: 48, height: 38)
+                        case "aquatic_bubble_rock": return CGSize(width: 44, height: 36)
                         default: return nil
                         }
                     }()
