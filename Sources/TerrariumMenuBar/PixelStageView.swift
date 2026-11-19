@@ -971,6 +971,16 @@ struct PixelStageView: View {
             }
         }
         .frame(width: 224 * scale, height: 176 * scale)
+        .overlay(alignment: .topLeading) {
+            Text("Day \(state.activeContainerDays)")
+                .font(.system(size: max(10, 5.2 * scale), weight: .bold, design: .monospaced))
+                .padding(.horizontal, 3.0 * scale)
+                .padding(.vertical, 1.5 * scale)
+                .background(Color(red: 0.09, green: 0.13, blue: 0.11).opacity(0.78))
+                .foregroundColor(Color(red: 0.99, green: 0.90, blue: 0.54))
+                .overlay(Rectangle().stroke(Color(red: 0.23, green: 0.32, blue: 0.27), lineWidth: 1))
+                .padding(4 * scale)
+        }
         .overlay(
             Rectangle()
                 .strokeBorder(frameAccentColor, lineWidth: max(1, scale / 2))

@@ -632,6 +632,24 @@ runTest("test_achievements_14Titles_andIdempotentRewards") {
     check(TerrariumConfig.displayTitle(for: save) == "🐸 蛙鸣三重奏", "佩戴称号后应展示对应自定义称号")
 }
 
+runTest("test_idleDaysCalculation_andTankCreatedAt") {
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!
+    let day0 = cal.date(from: DateComponents(year: 2026, month: 6, day: 1, hour: 22, minute: 0))!
+    let sameDay = cal.date(from: DateComponents(year: 2026, month: 6, day: 1, hour: 23, minute: 30))!
+    let nextDay = cal.date(from: DateComponents(year: 2026, month: 6, day: 2, hour: 0, minute: 10))!
+    let day3 = cal.date(from: DateComponents(year: 2026, month: 6, day: 4, hour: 12, minute: 0))!
+
+    check(TerrariumConfig.elapsedDays(from: day0, to: sameDay, calendar: cal) == 0, "同日应显示 Day 0")
+    check(TerrariumConfig.elapsedDays(from: day0, to: nextDay, calendar: cal) == 1, "跨自然日次日应显示 Day 1")
+    check(TerrariumConfig.elapsedDays(from: day0, to: day3, calendar: cal) == 3, "第 4 天应显示 Day 3")
+    check(TerrariumConfig.elapsedDays(from: day3, to: day0, calendar: cal) == 0, "时间倒流保护应兜底为 0")
+
+    let fresh = TerrariumSaveData(lastSavedAt: day3, firstStartedAt: day3)
+    check(TerrariumConfig.elapsedDays(from: fresh.firstStartedAt, to: day3, calendar: cal) == 0, "重置后挂机天数应归 0")
+    check(TerrariumConfig.elapsedDays(from: fresh.containers[0].createdAt, to: day3, calendar: cal) == 0, "重置后首缸独立天数应归 0")
+}
+
 print("\nSummary: \(passedCount) passed, \(failedCount) failed.")
 if failedCount > 0 {
     Foundation.exit(1)

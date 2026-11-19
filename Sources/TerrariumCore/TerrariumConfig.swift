@@ -1332,4 +1332,12 @@ public enum TerrariumConfig {
         }
         return codexMilestoneTitle(unlockedCount: saveData.unlockedCodexIDs.count)
     }
+
+    /// 计算从起始日期到当前日期的挂机自然天数（Day 0, 1, 2...）
+    public static func elapsedDays(from startDate: Date, to now: Date = Date(), calendar: Calendar = .current) -> Int {
+        let startDay = calendar.startOfDay(for: startDate)
+        let currentDay = calendar.startOfDay(for: now)
+        let days = calendar.dateComponents([.day], from: startDay, to: currentDay).day ?? 0
+        return max(0, days)
+    }
 }

@@ -80,6 +80,8 @@ final class TerrariumState: ObservableObject {
     @Published var unlockedAchievementIDs: [String] = []
     @Published var equippedTitleID: String? = nil
     @Published var isShowingAchievementsInCodexTab: Bool = false
+    @Published var idleDays: Int = 0
+    @Published var activeContainerDays: Int = 0
 
     let vfxSubject = PassthroughSubject<VFXEvent, Never>()
 
@@ -1289,6 +1291,8 @@ final class TerrariumState: ObservableObject {
 
     func resetSaveData() {
         persistence.reset()
+        adminVirtualNowOffset = 0
+        adminSimulatedElapsedSeconds = 0
         saveData = TerrariumSaveData(lastSavedAt: Date())
         hasWeatherEvent = false
         eventMessage = nil
@@ -1406,6 +1410,11 @@ final class TerrariumState: ObservableObject {
         unlockedCodexIDs = saveData.unlockedCodexIDs
         unlockedAchievementIDs = saveData.unlockedAchievementIDs
         equippedTitleID = saveData.equippedTitleID
+        let effectiveNow = now.addingTimeInterval(adminVirtualNowOffset)
+        idleDays = TerrariumConfig.elapsedDays(from: saveData.firstStartedAt, to: effectiveNow)
+        activeContainerDays = saveData.containers.isEmpty
+            ? 0
+            : TerrariumConfig.elapsedDays(from: saveData.containers[activeContainerIndex].createdAt, to: effectiveNow)
         isResonanceActive = TerrariumConfig.ecosystemResonance(containers: saveData.containers).isActive
         twilightIntensity = TerrariumConfig.twilightTintIntensity(for: now)
 

@@ -39,6 +39,15 @@ struct MenuBarPopoverView: View {
                             .foregroundColor(adminAmber)
                             .overlay(Rectangle().stroke(adminAmber.opacity(0.6), lineWidth: 1))
                     }
+                    Text("Day \(state.idleDays)")
+                        .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(bgCard)
+                        .foregroundColor(textMuted)
+                        .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                        .help("累计挂机天数：\(state.idleDays) 天（重置存档后清零）")
                     Button("") {
                         state.toggleAdminMode()
                     }
