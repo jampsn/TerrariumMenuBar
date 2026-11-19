@@ -67,6 +67,8 @@ enum AerialVisitorKind: String, CaseIterable {
     case moonMoth = "moon_moth"
     case dragonfly
     case lunaCicada = "luna_cicada"
+    case antlionLacewing = "antlion_lacewing"
+    case orchidBee = "orchid_bee"
 }
 
 enum AerialVisitorPhase {
@@ -1197,6 +1199,18 @@ final class StageAnimator: ObservableObject {
                 desired.append((.lunaCicada, false))
             } else if visitWindow && (state.atmosphere == .night || state.atmosphere == .warm) && unlocked.contains("luna_cicada") {
                 desired.append((.lunaCicada, true))
+            }
+
+            if TerrariumConfig.isAntlionLacewingCondition(biome: state.currentBiome, atmosphere: state.atmosphere, temperature: state.temperature, humidity: state.humidity, plants: state.plants, enabledDecorIDs: state.enabledDecorIDs) {
+                desired.append((.antlionLacewing, false))
+            } else if visitWindow && state.atmosphere != .night && unlocked.contains("antlion_lacewing") {
+                desired.append((.antlionLacewing, true))
+            }
+
+            if TerrariumConfig.isOrchidBeeCondition(biome: state.currentBiome, atmosphere: state.atmosphere, humidity: state.humidity, plants: state.plants) {
+                desired.append((.orchidBee, false))
+            } else if visitWindow && state.atmosphere != .night && unlocked.contains("orchid_bee") {
+                desired.append((.orchidBee, true))
             }
         }
 

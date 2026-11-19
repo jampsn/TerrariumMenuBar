@@ -220,8 +220,8 @@ public enum TerrariumConfig {
              "marimo", "anubias", "lotus", "vallisneria", "red_ludwigia":
             return 2
         case "rhino_beetle", "tree_frog", "fire_newt", "firefly", "moon_moth", "dragonfly", "luna_cicada",
-             "sand_gecko", "scarab", "sand_scorpion", "horned_toad",
-             "hercules_beetle", "chameleon", "dart_frog", "blue_morpho", "red_eyed_frog",
+             "sand_gecko", "scarab", "sand_scorpion", "horned_toad", "antlion_lacewing",
+             "hercules_beetle", "chameleon", "dart_frog", "blue_morpho", "red_eyed_frog", "orchid_bee",
              "betta_fish", "crayfish", "crystal_shrimp":
             return 5
         default:
@@ -261,7 +261,7 @@ public enum TerrariumConfig {
 
     public static func codexMilestoneTitle(unlockedCount: Int) -> String {
         switch unlockedCount {
-        case 50...: return "🏆 全生态宗师"
+        case 52...: return "🏆 全生态宗师"
         case 42...: return "🌟 微境守望者"
         case 33...: return "🌿 博物学家"
         case 20...: return "🪴 箱庭园丁"
@@ -692,6 +692,21 @@ public enum TerrariumConfig {
         return atmosphere == .night && temperature >= 26 && enabledDecorIDs.contains("rainforest_vine") && hasMonstera
     }
 
+    public static func isAntlionLacewingCondition(biome: TerrariumBiome, atmosphere: SceneAtmosphere, temperature: Int, humidity: Int, plants: [PlantInstance], enabledDecorIDs: [String]) -> Bool {
+        guard biome == .sand else { return false }
+        let hasSandRock = enabledDecorIDs.contains("sand_cairn") || enabledDecorIDs.contains("sand_rib_arch")
+        let hasMatureFlora = plants.contains { $0.stage == .mature || $0.stage == .lushDew }
+        return (atmosphere == .day || atmosphere == .warm) && temperature >= 26 && humidity <= 48 && hasSandRock && hasMatureFlora
+    }
+
+    public static func isOrchidBeeCondition(biome: TerrariumBiome, atmosphere: SceneAtmosphere, humidity: Int, plants: [PlantInstance]) -> Bool {
+        guard biome == .rainforest else { return false }
+        let hasFlowerAnchor = plants.contains {
+            ($0.speciesID == "orchid" || $0.speciesID == "pitcher_plant") && $0.stage != .withered
+        }
+        return (atmosphere == .day || atmosphere == .warm) && humidity >= 72 && hasFlowerAnchor
+    }
+
     public static func isGlowShroomCondition(temperature: Int, humidity: Int, enabledDecorIDs: [String]) -> Bool {
         let effectiveTemp = enabledDecorIDs.contains("boulder") ? (temperature - 1) : temperature
         return effectiveTemp <= 19 && humidity >= 75
@@ -1073,6 +1088,7 @@ public enum TerrariumConfig {
             CodexEntry(id: "scarab", name: "琉璃圣甲虫", biome: .sand, category: "专属高阶", condition: "仙人球≥1 + 芦荟≥1 + 暖干(≥27°C, ≤42%)", desc: "只在仙人球与芦荟共存的暖阳荒漠中现身的宝石甲虫。", unlocked: false),
             CodexEntry(id: "sand_scorpion", name: "黄金沙蝎", biome: .sand, category: "专属高阶", condition: "叠石堆 + 风蚀拱 + 仙人球≥1 + ≥26°C", desc: "高举双钳与金黄尾刺在红砂间巡逻的沙漠守卫。", unlocked: false),
             CodexEntry(id: "horned_toad", name: "沙漠角蜥", biome: .sand, category: "专属高阶", condition: "叠石堆 + 红砂岩 + 仙人球≥1 + ≥27°C", desc: "头顶双角、身披棘甲的霸气荒漠大爬宠。", unlocked: false),
+            CodexEntry(id: "antlion_lacewing", name: "砂金蚁狮蛉", biome: .sand, category: "专属高阶", condition: "日/暖阳 + 叠石/风蚀拱 + 成熟植物 + ≥26°C且干燥", desc: "闪烁琥珀金光、拖着细长棒状触角的沙漠飞蛉。", unlocked: false),
             // 雨林缸植物 & 动物 (12)
             CodexEntry(id: "monstera", name: "龟背竹", biome: .rainforest, category: "雨林植物", condition: "热带雨林缸 + 湿度≥60%", desc: "标志性裂孔阔叶植物，是变色龙最喜欢的翠绿伪装屏障。", unlocked: false),
             CodexEntry(id: "bromeliad", name: "积水凤梨", biome: .rainforest, category: "雨林植物", condition: "龟背竹≥1 + 湿度≥72%", desc: "中心叶杯常蓄积甘露的艳红热带凤梨。", unlocked: false),
@@ -1086,6 +1102,7 @@ public enum TerrariumConfig {
             CodexEntry(id: "dart_frog", name: "蓝宝石箭毒蛙", biome: .rainforest, category: "专属高阶", condition: "积水凤梨朽桩 + 积水凤梨≥1 + 湿度≥72%", desc: "闪烁宝石蓝警戒斑的雨林迷你精灵，最爱在凤梨叶下轻跃。", unlocked: false),
             CodexEntry(id: "red_eyed_frog", name: "红眼树蛙", biome: .rainforest, category: "专属高阶", condition: "小瀑布石 + 孔雀竹芋≥1 + 湿度≥75%", desc: "睁着宝石红大眼、橙色脚趾的经典雨林明星。", unlocked: false),
             CodexEntry(id: "luna_cicada", name: "翠光夏蝉", biome: .rainforest, category: "专属高阶", condition: "夜晚 + ≥26°C + 藤蔓架 + 龟背竹≥1", desc: "仅在盛夏闷热雨林夜晚轻鸣滑翔的翡翠灵虫。", unlocked: false),
+            CodexEntry(id: "orchid_bee", name: "翡翠兰花蜂", biome: .rainforest, category: "专属高阶", condition: "日/暖阳 + 湿度≥72% + 热带兰花/猪笼草≥1", desc: "泛着金属翡翠光泽、专程飞来兰花丛采蜜的小精灵。", unlocked: false),
             // 碧波鱼缸植物 & 动物 (12)
             CodexEntry(id: "marimo", name: "莫斯藻球", biome: .aquatic, category: "水草", condition: "碧波鱼缸 + 溶氧≥55%", desc: "毛茸茸的圆球水藻，水底米虾的最爱。", unlocked: false),
             CodexEntry(id: "anubias", name: "皇冠水草", biome: .aquatic, category: "水草", condition: "莫斯藻球≥1 + 溶氧≥65%", desc: "苍翠阔叶水草，为红绿灯鱼提供穿行林影。", unlocked: false),

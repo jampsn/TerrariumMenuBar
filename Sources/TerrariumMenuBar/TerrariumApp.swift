@@ -83,6 +83,7 @@ struct TerrariumMenuBarApp: App {
             "char_ladybug_sheet", "char_desert_mantis_sheet", "char_horned_toad_sheet", "char_blue_morpho_sheet",
             "char_red_eyed_frog_sheet", "char_oto_catfish_sheet", "char_crystal_shrimp_sheet",
             "char_dragonfly_sheet", "char_luna_cicada_sheet",
+            "char_antlion_lacewing_sheet", "char_orchid_bee_sheet",
             "icon_mist", "icon_feed", "icon_clean", "icon_sleep"
         ]
         var failed: [String] = []
@@ -140,7 +141,9 @@ struct TerrariumMenuBarApp: App {
               PixelAssetLoader.spriteSheetFrame(named: "char_oto_catfish_sheet", frameIndex: 13, frameSize: CGSize(width: 16, height: 12)) != nil,
               PixelAssetLoader.spriteSheetFrame(named: "char_crystal_shrimp_sheet", frameIndex: 13, frameSize: CGSize(width: 14, height: 11)) != nil,
               PixelAssetLoader.spriteSheetFrame(named: "char_dragonfly_sheet", frameIndex: 7, frameSize: CGSize(width: 18, height: 14)) != nil,
-              PixelAssetLoader.spriteSheetFrame(named: "char_luna_cicada_sheet", frameIndex: 7, frameSize: CGSize(width: 16, height: 14)) != nil else {
+              PixelAssetLoader.spriteSheetFrame(named: "char_luna_cicada_sheet", frameIndex: 7, frameSize: CGSize(width: 16, height: 14)) != nil,
+              PixelAssetLoader.spriteSheetFrame(named: "char_antlion_lacewing_sheet", frameIndex: 7, frameSize: CGSize(width: 18, height: 14)) != nil,
+              PixelAssetLoader.spriteSheetFrame(named: "char_orchid_bee_sheet", frameIndex: 7, frameSize: CGSize(width: 14, height: 12)) != nil else {
             fputs("SELF_TEST_FAIL: New sprite sheet slicing failed.\n", stderr)
             Foundation.exit(1)
         }

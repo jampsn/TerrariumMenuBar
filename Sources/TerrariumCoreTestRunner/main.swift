@@ -501,15 +501,15 @@ runTest("test_persistenceBackupRecovery_andCorruptedIsolation") {
 
 runTest("test_v030_50Codex_frameSkins_andV4Migration") {
     let entries = TerrariumConfig.defaultCodexEntries()
-    check(entries.count == 50, "v0.3.0 图鉴总数应扩充至 50 项，实际=\(entries.count)")
-    check(Set(entries.map { $0.id }).count == 50, "50 项图鉴 ID 不可重复")
+    check(entries.count == 52, "v0.3.0 图鉴总数应扩充至 52 项，实际=\(entries.count)")
+    check(Set(entries.map { $0.id }).count == 52, "52 项图鉴 ID 不可重复")
 
     check(TerrariumConfig.codexMilestoneTitle(unlockedCount: 5) == "🔍 探索萌新", "5 项图鉴称号应为探索萌新")
     check(TerrariumConfig.codexMilestoneTitle(unlockedCount: 10) == "🌱 生态学徒", "10 项图鉴称号应为生态学徒")
     check(TerrariumConfig.codexMilestoneTitle(unlockedCount: 20) == "🪴 箱庭园丁", "20 项图鉴称号应为箱庭园丁")
     check(TerrariumConfig.codexMilestoneTitle(unlockedCount: 33) == "🌿 博物学家", "33 项图鉴称号应为博物学家")
     check(TerrariumConfig.codexMilestoneTitle(unlockedCount: 42) == "🌟 微境守望者", "42 项图鉴称号应为微境守望者")
-    check(TerrariumConfig.codexMilestoneTitle(unlockedCount: 50) == "🏆 全生态宗师", "50 项图鉴称号应为全生态宗师")
+    check(TerrariumConfig.codexMilestoneTitle(unlockedCount: 52) == "🏆 全生态宗师", "52 项图鉴称号应为全生态宗师")
 
     check(TankFrameSkin.allCases.count == 5, "缸体边框皮肤应有 5 款")
     check(TankFrameSkin.classic.cost == 0 && TankFrameSkin.obsidian.cost > 0, "经典款免费，黑曜石边框应消耗点数")
@@ -567,6 +567,23 @@ runTest("test_v030_phase2_resonance_twilight_andNarrative") {
     // 3. 挚友微叙事
     let line = TerrariumConfig.soulmateMicroNarrative(nickname: "阿绿", kind: .treeFrog, localTempC: 12, atmosphere: .day)
     check(line.contains("阿绿") && line.contains("12°C"), "挚友微叙事应融合昵称与当地气温")
+
+    // 4. 沙地与雨林专属空中奇遇物种判定
+    var sandInst = TerrariumInstanceState.empty(biome: .sand)
+    sandInst.atmosphere = .day
+    sandInst.temperature = 27
+    sandInst.humidity = 40
+    sandInst.enabledDecorIDs.append("sand_cairn")
+    sandInst.plants = [PlantInstance(speciesID: "agave", coord: GridCoord(col: 3, row: 3), stage: .mature)]
+    let sandUnlocked = TerrariumSimulation.evaluateCodexUnlocks(instance: sandInst, alreadyUnlocked: [])
+    check(sandUnlocked.contains("antlion_lacewing"), "沙地暖干+叠石+成熟植物应解锁砂金蚁狮蛉")
+
+    var rfInst = TerrariumInstanceState.empty(biome: .rainforest)
+    rfInst.atmosphere = .day
+    rfInst.humidity = 75
+    rfInst.plants = [PlantInstance(speciesID: "orchid", coord: GridCoord(col: 4, row: 4), stage: .mature)]
+    let rfUnlocked = TerrariumSimulation.evaluateCodexUnlocks(instance: rfInst, alreadyUnlocked: [])
+    check(rfUnlocked.contains("orchid_bee"), "雨林日间高湿+兰花应解锁翡翠兰花蜂")
 }
 
 print("\nSummary: \(passedCount) passed, \(failedCount) failed.")

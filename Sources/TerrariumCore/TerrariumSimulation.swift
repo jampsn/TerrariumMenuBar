@@ -983,6 +983,26 @@ public enum TerrariumSimulation {
             result.append("luna_cicada")
         }
 
+        if !alreadyUnlocked.contains("antlion_lacewing") && TerrariumConfig.isAntlionLacewingCondition(
+            biome: instance.biome,
+            atmosphere: instance.atmosphere,
+            temperature: instance.temperature,
+            humidity: instance.humidity,
+            plants: instance.plants,
+            enabledDecorIDs: instance.enabledDecorIDs
+        ) {
+            result.append("antlion_lacewing")
+        }
+
+        if !alreadyUnlocked.contains("orchid_bee") && TerrariumConfig.isOrchidBeeCondition(
+            biome: instance.biome,
+            atmosphere: instance.atmosphere,
+            humidity: instance.humidity,
+            plants: instance.plants
+        ) {
+            result.append("orchid_bee")
+        }
+
         return result
     }
 }

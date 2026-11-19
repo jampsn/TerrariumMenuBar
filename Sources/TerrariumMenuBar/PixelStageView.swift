@@ -697,6 +697,10 @@ struct PixelStageView: View {
                     drawSheetFrame(in: &ctx, sheet: "char_dragonfly_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 18, height: 14), screenPos: pos, anchor: CGPoint(x: 9, y: 7), flippedX: !v.facingRight)
                 case .lunaCicada:
                     drawSheetFrame(in: &ctx, sheet: "char_luna_cicada_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 16, height: 14), screenPos: pos, anchor: CGPoint(x: 8, y: 7), flippedX: !v.facingRight)
+                case .antlionLacewing:
+                    drawSheetFrame(in: &ctx, sheet: "char_antlion_lacewing_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 18, height: 14), screenPos: pos, anchor: CGPoint(x: 9, y: 7), flippedX: !v.facingRight)
+                case .orchidBee:
+                    drawSheetFrame(in: &ctx, sheet: "char_orchid_bee_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 14, height: 12), screenPos: pos, anchor: CGPoint(x: 7, y: 6), flippedX: !v.facingRight)
                 }
                 ctx.opacity = 1.0
             }
