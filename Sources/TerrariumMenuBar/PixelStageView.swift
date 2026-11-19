@@ -577,7 +577,7 @@ struct PixelStageView: View {
                     case .treeFrog:
                         drawSheetFrame(in: &ctx, sheet: "char_frog_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 24, height: 22), screenPos: screenPos, anchor: CGPoint(x: 12, y: 18), flippedX: !c.facingRight)
                     case .snail:
-                        drawSheetFrame(in: &ctx, sheet: "char_snail_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 20, height: 16), screenPos: screenPos, anchor: CGPoint(x: 10, y: 12), flippedX: !c.facingRight)
+                        drawSheetFrame(in: &ctx, sheet: "char_snail_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 17, height: 14), screenPos: screenPos, anchor: CGPoint(x: 8, y: 11), flippedX: !c.facingRight)
                     case .pillBug:
                         drawSheetFrame(in: &ctx, sheet: "char_pillbug_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 14, height: 10), screenPos: screenPos, anchor: CGPoint(x: 7, y: 7), flippedX: !c.facingRight)
                     case .rhinoBeetle:
@@ -585,7 +585,7 @@ struct PixelStageView: View {
                     case .amberBeetle:
                         drawSheetFrame(in: &ctx, sheet: "char_beetle_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 18, height: 14), screenPos: screenPos, anchor: CGPoint(x: 9, y: 11), flippedX: !c.facingRight)
                     case .sandGecko:
-                        drawSheetFrame(in: &ctx, sheet: "char_gecko_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 24, height: 16), screenPos: screenPos, anchor: CGPoint(x: 12, y: 12), flippedX: !c.facingRight)
+                        drawSheetFrame(in: &ctx, sheet: "char_gecko_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 28, height: 18), screenPos: screenPos, anchor: CGPoint(x: 14, y: 14), flippedX: !c.facingRight)
                     case .scarab:
                         drawSheetFrame(in: &ctx, sheet: "char_scarab_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 18, height: 14), screenPos: screenPos, anchor: CGPoint(x: 9, y: 11), flippedX: !c.facingRight)
                     case .leafInsect:
@@ -595,9 +595,9 @@ struct PixelStageView: View {
                     case .chameleon:
                         drawSheetFrame(in: &ctx, sheet: camoSheet, frameIndex: frameIdx, frameSize: CGSize(width: 26, height: 20), screenPos: screenPos, anchor: CGPoint(x: 13, y: 15), flippedX: !c.facingRight)
                     case .cherryShrimp:
-                        drawSheetFrame(in: &ctx, sheet: "char_shrimp_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 18, height: 14), screenPos: screenPos, anchor: CGPoint(x: 9, y: 11), flippedX: !c.facingRight)
+                        drawSheetFrame(in: &ctx, sheet: "char_shrimp_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 14, height: 11), screenPos: screenPos, anchor: CGPoint(x: 7, y: 9), flippedX: !c.facingRight)
                     case .neonTetra:
-                        drawSheetFrame(in: &ctx, sheet: "char_tetra_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 18, height: 12), screenPos: screenPos, anchor: CGPoint(x: 9, y: 6), flippedX: !c.facingRight)
+                        drawSheetFrame(in: &ctx, sheet: "char_tetra_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 14, height: 10), screenPos: screenPos, anchor: CGPoint(x: 7, y: 5), flippedX: !c.facingRight)
                     case .bettaFish:
                         drawSheetFrame(in: &ctx, sheet: "char_betta_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 30, height: 22), screenPos: screenPos, anchor: CGPoint(x: 17, y: 12), flippedX: !c.facingRight)
                     case .crayfish:
@@ -607,9 +607,9 @@ struct PixelStageView: View {
                     case .sandScorpion:
                         drawSheetFrame(in: &ctx, sheet: "char_sand_scorpion_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 22, height: 16), screenPos: screenPos, anchor: CGPoint(x: 11, y: 12), flippedX: !c.facingRight)
                     case .dartFrog:
-                        drawSheetFrame(in: &ctx, sheet: "char_dart_frog_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 20, height: 18), screenPos: screenPos, anchor: CGPoint(x: 10, y: 14), flippedX: !c.facingRight)
+                        drawSheetFrame(in: &ctx, sheet: "char_dart_frog_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 20, height: 18), screenPos: screenPos, anchor: CGPoint(x: 10, y: 15), flippedX: !c.facingRight)
                     case .corydoras:
-                        drawSheetFrame(in: &ctx, sheet: "char_corydoras_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 18, height: 14), screenPos: screenPos, anchor: CGPoint(x: 9, y: 10), flippedX: !c.facingRight)
+                        drawSheetFrame(in: &ctx, sheet: "char_corydoras_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 16, height: 12), screenPos: screenPos, anchor: CGPoint(x: 8, y: 9), flippedX: !c.facingRight)
                     }
                 })
             }
@@ -892,7 +892,7 @@ struct PixelStageView: View {
 
     private func critterFrameIndex(for c: CritterRuntime, globalTick: Int) -> Int {
         switch c.kind {
-        case .treeFrog:
+        case .treeFrog, .dartFrog:
             switch c.behavior {
             case .idle, .petted:
                 let seq = [0, 0, 1, 1, 2, 3]
@@ -966,7 +966,7 @@ struct PixelStageView: View {
             case .sleep: return 10 + ((globalTick / 10) % 2)
             }
 
-        case .bettaFish, .crayfish, .fireNewt, .sandScorpion, .dartFrog, .corydoras:
+        case .bettaFish, .crayfish, .fireNewt, .sandScorpion, .corydoras:
             switch c.behavior {
             case .idle, .petted: return (globalTick / 6) % 3
             case .patrol, .seekingFood: return 3 + ((globalTick / 3) % 4)

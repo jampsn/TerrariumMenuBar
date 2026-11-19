@@ -327,8 +327,8 @@ public enum TerrariumConfig {
                     cost: 6,
                     group: .meadowInsects,
                     assetName: "char_snail_sheet",
-                    frameWidth: 20,
-                    frameHeight: 16,
+                    frameWidth: 17,
+                    frameHeight: 14,
                     unlockConditionText: "苔藓≥1 + 湿度≥45%",
                     foodChainNote: "微虫螺共生群 · 与树蛙互斥"
                 ),
@@ -414,8 +414,8 @@ public enum TerrariumConfig {
                     cost: 18,
                     group: .sandPredator,
                     assetName: "char_gecko_sheet",
-                    frameWidth: 24,
-                    frameHeight: 16,
+                    frameWidth: 28,
+                    frameHeight: 18,
                     unlockConditionText: "风蚀红砂岩 + 沙地植物≥2 + ≥24°C",
                     foodChainNote: "沙地捕食者 · 不可与甲虫同缸"
                 ),
@@ -492,8 +492,8 @@ public enum TerrariumConfig {
                     cost: 10,
                     group: .aquaticPeaceful,
                     assetName: "char_shrimp_sheet",
-                    frameWidth: 18,
-                    frameHeight: 14,
+                    frameWidth: 14,
+                    frameHeight: 11,
                     unlockConditionText: "陶瓷躲避屋 + 莫斯藻球≥1",
                     foodChainNote: "温顺鱼虾共生群 · 与斗鱼/蓝螯虾互斥"
                 ),
@@ -504,8 +504,8 @@ public enum TerrariumConfig {
                     cost: 16,
                     group: .aquaticPeaceful,
                     assetName: "char_tetra_sheet",
-                    frameWidth: 18,
-                    frameHeight: 12,
+                    frameWidth: 14,
+                    frameHeight: 10,
                     unlockConditionText: "皇冠水草≥1 + 溶氧≥65%（5尾成群）",
                     foodChainNote: "中层群游观赏鱼 · 与斗鱼/蓝螯虾互斥"
                 ),
@@ -540,8 +540,8 @@ public enum TerrariumConfig {
                     cost: 14,
                     group: .aquaticPeaceful,
                     assetName: "char_corydoras_sheet",
-                    frameWidth: 18,
-                    frameHeight: 14,
+                    frameWidth: 16,
+                    frameHeight: 12,
                     unlockConditionText: "莫斯竹筒屋 + 沉木水草石 + 溶氧≥60%",
                     foodChainNote: "温顺底栖清道夫 · 可与米虾/灯鱼混养"
                 )

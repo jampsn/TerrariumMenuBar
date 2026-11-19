@@ -18,18 +18,21 @@ struct MenuBarPopoverView: View {
         ZStack {
             VStack(spacing: 0) {
             // 顶部标题与 Tab 栏（连击标题 5 次解锁会话级管理员模式）
-            HStack {
-                HStack(spacing: 6) {
-                    Text("PIXEL TERRARIUM")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+            HStack(spacing: 4) {
+                HStack(spacing: 4) {
+                    Text(state.isAdminMode ? "TERRARIUM" : "PIXEL TERRARIUM")
+                        .font(.system(size: 10.5, weight: .bold, design: .monospaced))
                         .foregroundColor(textMain)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                         .onTapGesture {
                             state.registerSecretTitleTap()
                         }
                     if state.isAdminMode {
                         Text("[ADMIN]")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .padding(.horizontal, 5)
+                            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                            .fixedSize(horizontal: true, vertical: false)
+                            .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(adminAmber.opacity(0.22))
                             .foregroundColor(adminAmber)
@@ -43,7 +46,7 @@ struct MenuBarPopoverView: View {
                     .opacity(0)
                 }
 
-                Spacer()
+                Spacer(minLength: 4)
 
                 HStack(spacing: 4) {
                     ForEach(PopoverTab.allCases, id: \.self) { tab in
@@ -51,8 +54,9 @@ struct MenuBarPopoverView: View {
                             state.currentTab = tab
                         } label: {
                             Text(tab == .codex ? "图鉴(\(state.unlockedCodexCount)/\(state.codexEntries.count))" : tab.rawValue)
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                .padding(.horizontal, 9)
+                                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                                .fixedSize(horizontal: true, vertical: false)
+                                .padding(.horizontal, 7)
                                 .padding(.vertical, 3)
                                 .background(state.currentTab == tab ? accentGreen : bgCard)
                                 .foregroundColor(state.currentTab == tab ? .white : textMuted)
@@ -65,26 +69,28 @@ struct MenuBarPopoverView: View {
                     }
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 10)
             .padding(.vertical, 10)
             .background(bgHeader)
             .overlay(Rectangle().frame(height: 2).foregroundColor(borderCol), alignment: .bottom)
 
-            // 主内容区（固定高度确保切换 Tab 时 Popover 始终紧贴 Menubar 下方、不上下跳动）
+            // 主内容区：生态箱 Tab 上方固定、下方随内容自适应扩展；其余列表 Tab 固定高度内部滚动
             Group {
                 switch state.currentTab {
                 case .terrarium:
                     terrariumTabContent
                 case .decor:
                     decorTabContent
+                        .frame(height: 500)
                 case .critters:
                     crittersTabContent
+                        .frame(height: 500)
                 case .codex:
                     codexTabContent
+                        .frame(height: 500)
                 }
             }
             .padding(12)
-            .frame(height: 540, alignment: .top)
 
             // 底部状态栏
             HStack {
@@ -128,6 +134,7 @@ struct MenuBarPopoverView: View {
         }
         .frame(width: 472)
         .background(bgMain)
+        .preferredColorScheme(.dark)
     }
 
     private var biomeSwitcherBar: some View {
@@ -1042,25 +1049,26 @@ struct MenuBarPopoverView: View {
                                 Text("性格：\(owned.personality) · \(TerrariumConfig.perkDescription(for: owned.personality, stage: stage))")
                                     .font(.system(size: 9.5, design: .monospaced))
                                     .foregroundColor(Color(red: 0.99, green: 0.80, blue: 0.84))
-                                    .lineLimit(1)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                             Text("条件：\(spec.unlockConditionText) · \(elig.eligible ? "已达标" : elig.missingReason)")
                                 .font(.system(size: 9.8, design: .monospaced))
                                 .foregroundColor(elig.eligible ? Color(red: 0.65, green: 0.92, blue: 0.68) : textMuted)
-                                .lineLimit(1)
+                                .fixedSize(horizontal: false, vertical: true)
                             Text(spec.foodChainNote)
                                 .font(.system(size: 9.5, design: .monospaced))
                                 .foregroundColor(conflictsActive ? adminAmber : textMuted.opacity(0.85))
-                                .lineLimit(1)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
 
-                        Spacer()
+                        Spacer(minLength: 4)
 
                         if owned != nil {
                             Button(isInTank ? "在缸中 · 收起" : (conflictsActive ? "换入(存仓旧群)" : "放入生态箱")) {
                                 state.critterPurchaseAndToggle(spec.kind)
                             }
                             .buttonStyle(.plain)
+                            .fixedSize(horizontal: true, vertical: false)
                             .disabled(!isInTank && !elig.eligible)
                             .font(.system(size: 10.5, design: .monospaced))
                             .padding(.horizontal, 8)
@@ -1073,6 +1081,7 @@ struct MenuBarPopoverView: View {
                                 state.critterPurchaseAndToggle(spec.kind)
                             }
                             .buttonStyle(.plain)
+                            .fixedSize(horizontal: true, vertical: false)
                             .disabled(!canBuy)
                             .font(.system(size: 10.5, design: .monospaced))
                             .padding(.horizontal, 8)
