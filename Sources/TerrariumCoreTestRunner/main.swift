@@ -541,6 +541,34 @@ runTest("test_v030_50Codex_frameSkins_andV4Migration") {
     check(migrated.activeFrameSkinID == TankFrameSkin.classic.rawValue, "v4 旧存档迁移后应默认启用 classic 边框")
 }
 
+runTest("test_v030_phase2_resonance_twilight_andNarrative") {
+    // 1. 多缸轻度生态共振
+    let c1 = TerrariumContainer(customName: "苔原", instance: TerrariumInstanceState.empty(biome: .meadow))
+    var c2 = TerrariumContainer(customName: "沙地", instance: TerrariumInstanceState.empty(biome: .sand))
+    check(!TerrariumConfig.ecosystemResonance(containers: [c1]).isActive, "单缸不得激活跨生态共鸣")
+
+    c2.instance.isSleeping = true
+    check(!TerrariumConfig.ecosystemResonance(containers: [c1, c2]).isActive, "另一生态缸处于休眠时不激活共鸣")
+
+    c2.instance.isSleeping = false
+    let res = TerrariumConfig.ecosystemResonance(containers: [c1, c2])
+    check(res.isActive && res.distinctBiomeCount == 2 && res.plantSpawnMult == 1.10 && res.efficiencyBonus == 0.05, "2 种不同活跃生态缸应激活 +10% 萌发与 +5% 效率共鸣")
+
+    // 2. 晨昏光影强度
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!
+    let dawnPeak = cal.date(from: DateComponents(year: 2026, month: 6, day: 1, hour: 6, minute: 45))!
+    let duskPeak = cal.date(from: DateComponents(year: 2026, month: 6, day: 1, hour: 18, minute: 15))!
+    let noon = cal.date(from: DateComponents(year: 2026, month: 6, day: 1, hour: 12, minute: 0))!
+    check(TerrariumConfig.twilightTintIntensity(for: dawnPeak, calendar: cal) == 1.0, "06:45 日出峰值强度应为 1.0")
+    check(TerrariumConfig.twilightTintIntensity(for: duskPeak, calendar: cal) == 1.0, "18:15 日落峰值强度应为 1.0")
+    check(TerrariumConfig.twilightTintIntensity(for: noon, calendar: cal) == 0.0, "正午 12:00 晨昏光晕强度应为 0.0")
+
+    // 3. 挚友微叙事
+    let line = TerrariumConfig.soulmateMicroNarrative(nickname: "阿绿", kind: .treeFrog, localTempC: 12, atmosphere: .day)
+    check(line.contains("阿绿") && line.contains("12°C"), "挚友微叙事应融合昵称与当地气温")
+}
+
 print("\nSummary: \(passedCount) passed, \(failedCount) failed.")
 if failedCount > 0 {
     Foundation.exit(1)

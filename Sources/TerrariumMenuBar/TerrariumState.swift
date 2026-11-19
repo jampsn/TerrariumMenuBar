@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import Foundation
 import os
@@ -69,6 +70,13 @@ final class TerrariumState: ObservableObject {
     @Published var codexMilestoneTitle: String = "🔍 探索萌新"
     @Published var unlockedFrameSkinIDs: [String] = [TankFrameSkin.classic.rawValue]
     @Published var activeFrameSkin: TankFrameSkin = .classic
+    @Published var isResonanceActive: Bool = false
+    @Published var unlockedCodexIDs: [String] = []
+    @Published var twilightIntensity: Double = 0.0
+    @Published var isShowingRenameTankSheet: Bool = false
+    @Published var renameTankDraft: String = ""
+    @Published var renamingCritterKind: CritterKind? = nil
+    @Published var renameCritterDraft: String = ""
 
     let vfxSubject = PassthroughSubject<VFXEvent, Never>()
 
@@ -430,6 +438,7 @@ final class TerrariumState: ObservableObject {
 
         var pointsBuffer = saveData.ecoPoints
         var codexBuffer = saveData.unlockedCodexIDs
+        let resonance = TerrariumConfig.ecosystemResonance(containers: saveData.containers)
 
         for idx in saveData.containers.indices {
             let container = saveData.containers[idx]
@@ -446,7 +455,9 @@ final class TerrariumState: ObservableObject {
                 elapsedSeconds: elapsed,
                 now: now,
                 localOutdoorTempC: saveData.lastKnownLocalTempC,
-                tankSlotIndex: idx
+                tankSlotIndex: idx,
+                resonanceSpawnMult: resonance.plantSpawnMult,
+                resonanceEfficiencyBonus: resonance.efficiencyBonus
             )
 
             if isCurrentActive && (!summary.arrivedCritters.isEmpty || !summary.settledCritters.isEmpty) {
@@ -1156,6 +1167,47 @@ final class TerrariumState: ObservableObject {
         guard !trimmed.isEmpty, !saveData.containers.isEmpty else { return }
         saveData.containers[activeContainerIndex].customName = String(trimmed.prefix(16))
         commitStateChange()
+        bannerNotice = "已将当前生态缸命名为「\(activeContainerName)」"
+    }
+
+    func renameCritter(kind: CritterKind, to rawName: String) {
+        let trimmed = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        var inst = activeInstance
+        guard let idx = inst.critters.firstIndex(where: { $0.kind == kind }) else { return }
+        let safeName = String(trimmed.prefix(14))
+        inst.critters[idx].nickname = safeName
+        activeInstance = inst
+        commitStateChange()
+        bannerNotice = "已为 \(kind.rawValue) 起名为「\(safeName)」"
+    }
+
+    func exportPixelSnapshot<V: View>(content: V) {
+        let renderer = ImageRenderer(content: content)
+        renderer.scale = 1.0
+        guard let nsImage = renderer.nsImage,
+              let tiffData = nsImage.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            bannerNotice = "快照生成失败，请稍后重试"
+            return
+        }
+
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.png]
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd_HHmm"
+        let safeTankName = activeContainerName.replacingOccurrences(of: "/", with: "-")
+        panel.nameFieldStringValue = "\(safeTankName)_\(formatter.string(from: Date())).png"
+        panel.title = "导出 4x 无损像素生态快照"
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                try pngData.write(to: url)
+                bannerNotice = "📸 已保存像素快照：\(url.lastPathComponent)"
+            } catch {
+                bannerNotice = "保存快照失败：\(error.localizedDescription)"
+            }
+        }
     }
 
     // MARK: - 管理员模式专属接口（普通模式严格拦截）
@@ -1334,6 +1386,9 @@ final class TerrariumState: ObservableObject {
         codexMilestoneTitle = TerrariumConfig.codexMilestoneTitle(unlockedCount: unlockedCodexSet.count)
         unlockedFrameSkinIDs = saveData.unlockedFrameSkinIDs
         activeFrameSkin = TankFrameSkin(rawValue: saveData.activeFrameSkinID) ?? .classic
+        unlockedCodexIDs = saveData.unlockedCodexIDs
+        isResonanceActive = TerrariumConfig.ecosystemResonance(containers: saveData.containers).isActive
+        twilightIntensity = TerrariumConfig.twilightTintIntensity(for: now)
 
         let unlockedDecorSet = Set(inst.unlockedDecorIDs)
         let enabledDecorSet = Set(inst.enabledDecorIDs)

@@ -136,6 +136,14 @@ struct MenuBarPopoverView: View {
             if state.isShowingSettings {
                 settingsOverlay
             }
+
+            if state.isShowingRenameTankSheet {
+                renameTankOverlay
+            }
+
+            if let targetKind = state.renamingCritterKind {
+                renameCritterOverlay(kind: targetKind)
+            }
         }
         .frame(width: 472)
         .background(bgMain)
@@ -150,7 +158,41 @@ struct MenuBarPopoverView: View {
                     .font(.system(size: 10.5, weight: .bold, design: .monospaced))
                     .foregroundColor(textMuted)
 
+                if state.isResonanceActive {
+                    Text("✨共鸣")
+                        .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(adminAmber.opacity(0.2))
+                        .foregroundColor(adminAmber)
+                        .overlay(Rectangle().stroke(adminAmber.opacity(0.6), lineWidth: 1))
+                        .help("跨生态共鸣已激活：植物萌发 +10%，分缸效率 +5%")
+                }
+
                 Spacer()
+
+                Button("✏️") {
+                    state.renameTankDraft = state.activeContainerName
+                    state.isShowingRenameTankSheet = true
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(bgCard)
+                .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                .help("重命名当前生态缸")
+
+                Button("📸") {
+                    state.exportPixelSnapshot(content: PixelStageSnapshotCard(state: state))
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(bgCard)
+                .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                .help("导出 4x 无损像素生态快照")
 
                 Button(state.isShowingBuyTankSheet ? "收起商店" : "+ 购置新缸") {
                     state.isShowingBuyTankSheet.toggle()
@@ -906,6 +948,94 @@ struct MenuBarPopoverView: View {
         }
     }
 
+    private var renameTankOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.55)
+                .onTapGesture { state.isShowingRenameTankSheet = false }
+            VStack(alignment: .leading, spacing: 10) {
+                Text("重命名当前生态缸")
+                    .font(.system(size: 12.5, weight: .bold, design: .monospaced))
+                    .foregroundColor(textMain)
+                TextField("最多 16 字", text: $state.renameTankDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12, design: .monospaced))
+                HStack {
+                    Spacer()
+                    Button("取消") {
+                        state.isShowingRenameTankSheet = false
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, design: .monospaced))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(bgCard)
+                    .foregroundColor(textMuted)
+                    .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+
+                    Button("保存") {
+                        state.renameActiveContainer(to: state.renameTankDraft)
+                        state.isShowingRenameTankSheet = false
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(accentGreen)
+                    .foregroundColor(.white)
+                    .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                }
+            }
+            .padding(12)
+            .frame(width: 280)
+            .background(bgHeader)
+            .overlay(Rectangle().stroke(borderCol, lineWidth: 2))
+        }
+    }
+
+    private func renameCritterOverlay(kind: CritterKind) -> some View {
+        ZStack {
+            Color.black.opacity(0.55)
+                .onTapGesture { state.renamingCritterKind = nil }
+            VStack(alignment: .leading, spacing: 10) {
+                Text("为「\(kind.rawValue)」起昵称")
+                    .font(.system(size: 12.5, weight: .bold, design: .monospaced))
+                    .foregroundColor(textMain)
+                TextField("最多 14 字", text: $state.renameCritterDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12, design: .monospaced))
+                HStack {
+                    Spacer()
+                    Button("取消") {
+                        state.renamingCritterKind = nil
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, design: .monospaced))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(bgCard)
+                    .foregroundColor(textMuted)
+                    .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+
+                    Button("保存") {
+                        state.renameCritter(kind: kind, to: state.renameCritterDraft)
+                        state.renamingCritterKind = nil
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(accentGreen)
+                    .foregroundColor(.white)
+                    .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                }
+            }
+            .padding(12)
+            .frame(width: 280)
+            .background(bgHeader)
+            .overlay(Rectangle().stroke(borderCol, lineWidth: 2))
+        }
+    }
+
     private func miniBtn(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
@@ -1130,10 +1260,23 @@ struct MenuBarPopoverView: View {
 
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 5) {
-                                Text(spec.name)
+                                let labelName: String = {
+                                    if let owned, let nick = owned.nickname, !nick.isEmpty, nick != spec.name {
+                                        return "\(spec.name)「\(nick)」"
+                                    }
+                                    return spec.name
+                                }()
+                                Text(labelName)
                                     .font(.system(size: 12, weight: .bold, design: .monospaced))
                                     .foregroundColor(textMain)
                                 if let owned {
+                                    Button("✏️") {
+                                        state.renameCritterDraft = owned.nickname ?? spec.name
+                                        state.renamingCritterKind = spec.kind
+                                    }
+                                    .buttonStyle(.plain)
+                                    .font(.system(size: 10))
+                                    .help("自定义昵称")
                                     let stage = TerrariumConfig.affinityStage(for: owned.affinity)
                                     Text("♥\(owned.affinity)/\(TerrariumConfig.maxAffinity) · \(stage.title)")
                                         .font(.system(size: 9.5, design: .monospaced))

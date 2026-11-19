@@ -1225,4 +1225,62 @@ public enum TerrariumConfig {
             return GridCoord(col: max(0, o.col - 1), row: o.row + 1)
         }
     }
+
+    // MARK: - v0.3.0 第二阶段：多缸轻度生态共鸣、晨昏光影与挚友微叙事
+
+    public struct EcosystemResonance: Equatable {
+        public let isActive: Bool
+        public let distinctBiomeCount: Int
+        public let plantSpawnMult: Double
+        public let efficiencyBonus: Double
+    }
+
+    /// 当存档内同时存在 ≥2 种不同生态的活跃未休眠缸时，激活跨缸微气候共鸣
+    public static func ecosystemResonance(containers: [TerrariumContainer]) -> EcosystemResonance {
+        let activeBiomes = Set(containers.filter { !$0.instance.isSleeping }.map { $0.instance.biome })
+        let distinctCount = activeBiomes.count
+        if distinctCount >= 2 {
+            return EcosystemResonance(isActive: true, distinctBiomeCount: distinctCount, plantSpawnMult: 1.10, efficiencyBonus: 0.05)
+        }
+        return EcosystemResonance(isActive: false, distinctBiomeCount: distinctCount, plantSpawnMult: 1.0, efficiencyBonus: 0.0)
+    }
+
+    /// 日出（06:00~07:30）与日落（17:30~19:00）的柔和暖金光晕强度（0.0~1.0）
+    public static func twilightTintIntensity(for date: Date = Date(), calendar: Calendar = .current) -> Double {
+        let hour = calendar.component(.hour, from: date)
+        let minute = calendar.component(.minute, from: date)
+        let totalMins = Double(hour * 60 + minute)
+
+        // 日出 360~450，峰值 405
+        if totalMins >= 360.0 && totalMins <= 450.0 {
+            let dist = abs(totalMins - 405.0) / 45.0
+            return max(0.0, 1.0 - dist)
+        }
+        // 日落 1050~1140，峰值 1095
+        if totalMins >= 1050.0 && totalMins <= 1140.0 {
+            let dist = abs(totalMins - 1095.0) / 45.0
+            return max(0.0, 1.0 - dist)
+        }
+        return 0.0
+    }
+
+    /// Lv.5 挚友微叙事短句（结合昵称、当地室外气温与氛围）
+    public static func soulmateMicroNarrative(nickname: String, kind: CritterKind, localTempC: Int?, atmosphere: SceneAtmosphere) -> String {
+        if atmosphere == .rain {
+            return "「\(nickname)」静静望着窗外雨丝，安心地打了个盹"
+        }
+        if atmosphere == .night {
+            return "「\(nickname)」在微光下陪你加班，状态很惬意呢"
+        }
+        if let temp = localTempC {
+            if temp <= 15 {
+                return "「\(nickname)」贴在玻璃边打招呼：外面只有 \(temp)°C 呢"
+            } else if temp >= 28 {
+                return "「\(nickname)」躲在叶荫乘凉：外面 \(temp)°C 好热呀"
+            } else {
+                return "「\(nickname)」精神满满，外面 \(temp)°C 正舒适"
+            }
+        }
+        return "「\(nickname)」对你亲昵地蹭了蹭玻璃壁 ♥"
+    }
 }

@@ -925,6 +925,16 @@ final class StageAnimator: ObservableObject {
                 } else {
                     let outcome = state.petCritter(kind: c.kind, at: CGPoint(x: screenPos.x, y: screenPos.y - 16), now: now)
                     let isSoulmate = (stage == .soulmate)
+                    if isSoulmate,
+                       let critterData = state.critters.first(where: { $0.kind == c.kind }) {
+                        let nick = (critterData.nickname?.isEmpty == false) ? (critterData.nickname ?? c.kind.rawValue) : c.kind.rawValue
+                        state.bannerNotice = TerrariumConfig.soulmateMicroNarrative(
+                            nickname: nick,
+                            kind: c.kind,
+                            localTempC: state.localOutdoorTempC,
+                            atmosphere: state.atmosphere
+                        )
+                    }
                     let heartSymbol: String
                     let sparkleCount: Int
                     switch outcome {

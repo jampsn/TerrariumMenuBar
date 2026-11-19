@@ -120,6 +120,8 @@ public enum TerrariumSimulation {
         var pointsBuffer = data.ecoPoints
         var codexBuffer = data.unlockedCodexIDs
 
+        let resonance = TerrariumConfig.ecosystemResonance(containers: data.containers)
+
         for idx in data.containers.indices {
             var inst = data.containers[idx].instance
             let summary = advanceInstance(
@@ -130,7 +132,9 @@ public enum TerrariumSimulation {
                 now: now,
                 localOutdoorTempC: data.lastKnownLocalTempC,
                 tankSlotIndex: idx,
-                isOfflineSettlement: true
+                isOfflineSettlement: true,
+                resonanceSpawnMult: resonance.plantSpawnMult,
+                resonanceEfficiencyBonus: resonance.efficiencyBonus
             )
             data.containers[idx].instance = inst
             totalPoints += summary.earnedEcoPoints
@@ -158,7 +162,9 @@ public enum TerrariumSimulation {
         allowRandomSpawn: Bool = true,
         localOutdoorTempC: Int? = nil,
         tankSlotIndex: Int = 0,
-        isOfflineSettlement: Bool = false
+        isOfflineSettlement: Bool = false,
+        resonanceSpawnMult: Double = 1.0,
+        resonanceEfficiencyBonus: Double = 0.0
     ) -> InstanceAdvanceSummary {
         guard !instance.isSleeping, elapsedSeconds > 0 else {
             return InstanceAdvanceSummary(
@@ -256,7 +262,8 @@ public enum TerrariumSimulation {
                     ? TerrariumConfig.ecoPointOptimalIntervalSeconds
                     : TerrariumConfig.ecoPointBaseIntervalSeconds
                 let ecoBoost = tankEcoSpeedBoost(for: instance.critters)
-                let slotEfficiency = TerrariumConfig.tankEfficiencyMultiplier(slotIndex: tankSlotIndex)
+                let baseSlotEff = TerrariumConfig.tankEfficiencyMultiplier(slotIndex: tankSlotIndex)
+                let slotEfficiency = min(1.0, baseSlotEff + resonanceEfficiencyBonus)
                 let interval = baseInterval / max(0.35, slotEfficiency * (1.0 + ecoBoost))
                 let offlineDecayFactor = (isOfflineSettlement && progressedSeconds > TerrariumConfig.offlineFullRateSeconds) ? 0.5 : 1.0
                 instance.accumulatedEcoSeconds += dt * offlineDecayFactor
@@ -279,7 +286,7 @@ public enum TerrariumSimulation {
                 instance.plantPulseSeconds += dt
                 if instance.plantPulseSeconds >= pulseInterval {
                     instance.plantPulseSeconds.formTruncatingRemainder(dividingBy: pulseInterval)
-                    if let spawned = attemptRandomPlantSpawn(instance: &instance) {
+                    if let spawned = attemptRandomPlantSpawn(instance: &instance, spawnRateMultiplier: resonanceSpawnMult) {
                         spawnedCount += 1
                         if !unlockedSet.contains(spawned.speciesID) {
                             unlockedSet.insert(spawned.speciesID)
@@ -744,6 +751,7 @@ public enum TerrariumSimulation {
     @discardableResult
     public static func attemptRandomPlantSpawn(
         instance: inout TerrariumInstanceState,
+        spawnRateMultiplier: Double = 1.0,
         randomUnit: () -> Double = { Double.random(in: 0.0...1.0) },
         pickCoord: ([GridCoord]) -> GridCoord? = { $0.randomElement() }
     ) -> PlantInstance? {
@@ -904,7 +912,7 @@ public enum TerrariumSimulation {
             }
         }
         let densityFactor = 1.0 - Double(instance.plants.count) / Double(TerrariumConfig.maxPlantsCap)
-        let prob = min(1.0, max(0.0, baseProb * woodMult * extraSpawnMult * (instance.plants.isEmpty ? 1.0 : densityFactor)))
+        let prob = min(1.0, max(0.0, baseProb * woodMult * extraSpawnMult * spawnRateMultiplier * (instance.plants.isEmpty ? 1.0 : densityFactor)))
 
         guard randomUnit() <= prob, let chosenCoord = pickCoord(freeCoords) else {
             return nil

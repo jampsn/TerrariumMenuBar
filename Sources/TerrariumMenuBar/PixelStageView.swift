@@ -11,7 +11,8 @@ struct PixelStageView: View {
     @ObservedObject var state: TerrariumState
     @StateObject private var animator = StageAnimator()
 
-    private let scale: CGFloat = 2.0
+    var scale: CGFloat = 2.0
+    var isSnapshot: Bool = false
 
     var body: some View {
         Canvas { context, size in
@@ -560,8 +561,26 @@ struct PixelStageView: View {
                 })
             }
 
-            // 4d. 仿真多帧小动物（6 种，和平共处、精准面向食盆进食）
-            for c in animator.critterRuntimes {
+            // 4d. 仿真多帧小动物（和平共处、精准面向食盆进食；离屏快照模式兜底读取 state.critters）
+            let renderCritters: [CritterRuntime] = {
+                if !animator.critterRuntimes.isEmpty {
+                    return animator.critterRuntimes
+                }
+                guard isSnapshot else { return [] }
+                return state.critters.filter { $0.residency != .stored }.map { c in
+                    CritterRuntime(
+                        id: "snap_\(c.kind.rawValue)",
+                        kind: c.kind,
+                        schoolIndex: 0,
+                        gx: Double(c.coord.col) + 0.5,
+                        gy: Double(c.coord.row) + 0.5,
+                        gz: (c.kind == .neonTetra || c.kind == .bettaFish) ? 18.0 : 0.0,
+                        facingRight: true,
+                        behavior: state.isSleeping ? .sleep : .idle
+                    )
+                }
+            }()
+            for c in renderCritters {
                 let screenPos = TerrariumConfig.isoToScreen(gx: c.gx, gy: c.gy, gz: c.gz)
                 let depth = (c.gx + c.gy) * 1000.0 + c.gz * 10.0 + 3.0
                 let camoSheet: String = {
@@ -653,32 +672,47 @@ struct PixelStageView: View {
                 item.draw(&context)
             }
 
-            // ==================== Pass 5: 空中专属生物（萤火虫 & 月光飞蛾）与 VFX 粒子 ====================
-            if TerrariumConfig.isFireflyCondition(biome: state.currentBiome, atmosphere: state.atmosphere, humidity: state.humidity, plants: state.plants, enabledDecorIDs: state.enabledDecorIDs) {
+            // ==================== Pass 5: 空中专属生物（原生 + 多缸共鸣串门）与 VFX 粒子 ====================
+            let unlockedSet = Set(state.unlockedCodexIDs)
+            let visitWindow = state.isResonanceActive && !state.isSleeping && ((animator.tick % 900) < 240)
+
+            let nativeFirefly = TerrariumConfig.isFireflyCondition(biome: state.currentBiome, atmosphere: state.atmosphere, humidity: state.humidity, plants: state.plants, enabledDecorIDs: state.enabledDecorIDs)
+            let visitingFirefly = !nativeFirefly && visitWindow && state.atmosphere == .night && unlockedSet.contains("firefly")
+            if nativeFirefly || visitingFirefly {
                 let flyGX = 5.5 + sin(Double(animator.tick) * 0.08) * 2.8
                 let flyGY = 5.0 + cos(Double(animator.tick) * 0.11) * 2.4
                 let flyGZ = 24.0 + sin(Double(animator.tick) * 0.16) * 4.0
                 let flyPos = TerrariumConfig.isoToScreen(gx: flyGX, gy: flyGY, gz: flyGZ)
                 let flyFrame = state.isSleeping ? 7 : ((animator.tick / 2) % 4)
+                context.opacity = visitingFirefly ? 0.72 : 1.0
                 drawSheetFrame(in: &context, sheet: "char_firefly_sheet", frameIndex: flyFrame, frameSize: CGSize(width: 12, height: 12), screenPos: flyPos, anchor: CGPoint(x: 6, y: 6))
+                context.opacity = 1.0
             }
 
-            if TerrariumConfig.isMoonMothCondition(biome: state.currentBiome, atmosphere: state.atmosphere, humidity: state.humidity, plants: state.plants) {
+            let nativeMoth = TerrariumConfig.isMoonMothCondition(biome: state.currentBiome, atmosphere: state.atmosphere, humidity: state.humidity, plants: state.plants)
+            let visitingMoth = !nativeMoth && visitWindow && state.atmosphere == .night && unlockedSet.contains("moon_moth")
+            if nativeMoth || visitingMoth {
                 let mothGX = 4.5 + cos(Double(animator.tick) * 0.07) * 2.6
                 let mothGY = 4.2 + sin(Double(animator.tick) * 0.09) * 2.2
                 let mothGZ = 28.0 + cos(Double(animator.tick) * 0.14) * 3.5
                 let mothPos = TerrariumConfig.isoToScreen(gx: mothGX, gy: mothGY, gz: mothGZ)
                 let mothFrame = state.isSleeping ? 6 : ((animator.tick / 3) % 4)
+                context.opacity = visitingMoth ? 0.72 : 1.0
                 drawSheetFrame(in: &context, sheet: "char_moth_sheet", frameIndex: mothFrame, frameSize: CGSize(width: 16, height: 14), screenPos: mothPos, anchor: CGPoint(x: 8, y: 7))
+                context.opacity = 1.0
             }
 
-            if TerrariumConfig.isDragonflyCondition(biome: state.currentBiome, atmosphere: state.atmosphere, humidity: state.humidity, plants: state.plants, enabledDecorIDs: state.enabledDecorIDs) {
+            let nativeDragonfly = TerrariumConfig.isDragonflyCondition(biome: state.currentBiome, atmosphere: state.atmosphere, humidity: state.humidity, plants: state.plants, enabledDecorIDs: state.enabledDecorIDs)
+            let visitingDragonfly = !nativeDragonfly && visitWindow && state.atmosphere != .night && unlockedSet.contains("dragonfly")
+            if nativeDragonfly || visitingDragonfly {
                 let dfGX = 5.0 + sin(Double(animator.tick) * 0.11) * 3.0
                 let dfGY = 4.8 + cos(Double(animator.tick) * 0.09) * 2.5
                 let dfGZ = 30.0 + sin(Double(animator.tick) * 0.18) * 3.0
                 let dfPos = TerrariumConfig.isoToScreen(gx: dfGX, gy: dfGY, gz: dfGZ)
                 let dfFrame = state.isSleeping ? 6 : ((animator.tick / 2) % 4)
+                context.opacity = visitingDragonfly ? 0.72 : 1.0
                 drawSheetFrame(in: &context, sheet: "char_dragonfly_sheet", frameIndex: dfFrame, frameSize: CGSize(width: 18, height: 14), screenPos: dfPos, anchor: CGPoint(x: 9, y: 7))
+                context.opacity = 1.0
             }
 
             if TerrariumConfig.isLunaCicadaCondition(biome: state.currentBiome, atmosphere: state.atmosphere, temperature: state.temperature, plants: state.plants, enabledDecorIDs: state.enabledDecorIDs) {
@@ -914,6 +948,22 @@ struct PixelStageView: View {
                 context.fill(breeze, with: .color(Color(red: 0.54, green: 0.88, blue: 1.0).opacity(0.06)))
             }
 
+            if !state.isSleeping && state.twilightIntensity > 0.01 {
+                let twilightRect = CGRect(x: 0, y: 0, width: size.width, height: size.height)
+                context.fill(
+                    Path(twilightRect),
+                    with: .linearGradient(
+                        Gradient(colors: [
+                            Color(red: 1.0, green: 0.66, blue: 0.28).opacity(0.16 * state.twilightIntensity),
+                            Color(red: 0.96, green: 0.48, blue: 0.36).opacity(0.05 * state.twilightIntensity),
+                            Color.clear
+                        ]),
+                        startPoint: CGPoint(x: 0, y: 0),
+                        endPoint: CGPoint(x: size.width, y: size.height)
+                    )
+                )
+            }
+
             if state.isSleeping {
                 drawFullImage("tank_lid_sleep")
                 context.draw(
@@ -924,13 +974,13 @@ struct PixelStageView: View {
                 )
             }
         }
-        .frame(width: 448, height: 352)
+        .frame(width: 224 * scale, height: 176 * scale)
         .overlay(
             Rectangle()
-                .strokeBorder(frameAccentColor, lineWidth: 1)
-                .padding(2)
+                .strokeBorder(frameAccentColor, lineWidth: max(1, scale / 2))
+                .padding(scale)
         )
-        .border(frameBorderColor, width: 2)
+        .border(frameBorderColor, width: scale)
         .contentShape(Rectangle())
         .gesture(
             SpatialTapGesture()
@@ -1059,6 +1109,35 @@ struct PixelStageView: View {
             case .startle: return 10 + ((c.stateTicks / 5) % 2)
             case .sleep: return 12 + ((globalTick / 10) % 2)
             }
+        }
+    }
+}
+
+/// 4x 无损像素生态快照导出卡（896x704 画布 + 底部像素角标）
+struct PixelStageSnapshotCard: View {
+    @ObservedObject var state: TerrariumState
+
+    private var dateLabel: String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f.string(from: Date())
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            PixelStageView(state: state, scale: 4.0, isSnapshot: true)
+            HStack {
+                Text("🌿 \(state.activeContainerName)  ·  \(state.currentBiome.rawValue)")
+                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                    .foregroundColor(Color(red: 0.85, green: 0.95, blue: 0.82))
+                Spacer()
+                Text("\(state.codexMilestoneTitle)  |  \(dateLabel)")
+                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .foregroundColor(Color(red: 0.56, green: 0.72, blue: 0.59))
+            }
+            .padding(.horizontal, 20)
+            .frame(width: 896, height: 48)
+            .background(Color(red: 0.12, green: 0.16, blue: 0.14))
         }
     }
 }
