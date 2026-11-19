@@ -1300,4 +1300,36 @@ public enum TerrariumConfig {
         }
         return "「\(nickname)」对你亲昵地蹭了蹭玻璃壁 ♥"
     }
+
+    // MARK: - 组合式成就称号系统（14 项，首次达成一次性奖励 +1~+3 生态点）
+
+    public static let defaultAchievements: [AchievementDefinition] = [
+        AchievementDefinition(id: "ach_codex_10", title: "🌱 生态学徒", category: "图鉴里程碑", conditionDesc: "解锁 ≥ 10 项物种图鉴", rewardPoints: 1),
+        AchievementDefinition(id: "ach_codex_20", title: "🪴 箱庭园丁", category: "图鉴里程碑", conditionDesc: "解锁 ≥ 20 项物种图鉴", rewardPoints: 2),
+        AchievementDefinition(id: "ach_codex_33", title: "🌿 博物学家", category: "图鉴里程碑", conditionDesc: "解锁 ≥ 33 项物种图鉴", rewardPoints: 2),
+        AchievementDefinition(id: "ach_codex_42", title: "🌟 微境守望者", category: "图鉴里程碑", conditionDesc: "解锁 ≥ 42 项物种图鉴", rewardPoints: 3),
+        AchievementDefinition(id: "ach_codex_52", title: "🏆 全生态宗师", category: "图鉴里程碑", conditionDesc: "集齐全部 52 项物种图鉴", rewardPoints: 3),
+        AchievementDefinition(id: "ach_four_biomes", title: "🌍 四象造景师", category: "跨缸生态", conditionDesc: "同时拥有苔原、沙地、雨林、水域 4 种生态缸", rewardPoints: 3),
+        AchievementDefinition(id: "ach_aerial_collector", title: "🦋 追风捕影客", category: "主题组合", conditionDesc: "集齐全部 6 种空中奇遇物种", rewardPoints: 3),
+        AchievementDefinition(id: "ach_frog_chorus", title: "🐸 蛙鸣三重奏", category: "主题组合", conditionDesc: "解锁绿豆树蛙、蓝宝石箭毒蛙与红眼树蛙", rewardPoints: 2),
+        AchievementDefinition(id: "ach_desert_lords", title: "🦂 沙海三霸主", category: "主题组合", conditionDesc: "解锁豹纹沙守宫、黄金沙蝎与沙漠角蜥", rewardPoints: 2),
+        AchievementDefinition(id: "ach_carnivore_flora", title: "🪴 奇异捕虫师", category: "主题组合", conditionDesc: "同时解锁茅膏菜与猪笼草", rewardPoints: 2),
+        AchievementDefinition(id: "ach_aquatic_jewels", title: "💎 水晶龙宫主", category: "主题组合", conditionDesc: "解锁樱花米虾、水晶红虾与迷你水睡莲", rewardPoints: 2),
+        AchievementDefinition(id: "ach_first_soulmate", title: "💛 莫逆之交", category: "羁绊养成", conditionDesc: "任意 1 只小动物达到 Lv.5 挚友", rewardPoints: 2),
+        AchievementDefinition(id: "ach_three_soulmates", title: "💕 万灵共主", category: "羁绊养成", conditionDesc: "累计拥有 ≥ 3 只 Lv.5 挚友小动物", rewardPoints: 3),
+        AchievementDefinition(id: "ach_skin_collector", title: "🖼️ 框景美学师", category: "造景美学", conditionDesc: "解锁 ≥ 3 款缸体边框皮肤", rewardPoints: 1)
+    ]
+
+    public static func displayTitle(for saveData: TerrariumSaveData) -> String {
+        let unlocked = Set(saveData.unlockedAchievementIDs)
+        if let eqID = saveData.equippedTitleID,
+           unlocked.contains(eqID),
+           let def = defaultAchievements.first(where: { $0.id == eqID }) {
+            return def.title
+        }
+        if let latest = defaultAchievements.last(where: { unlocked.contains($0.id) }) {
+            return latest.title
+        }
+        return codexMilestoneTitle(unlockedCount: saveData.unlockedCodexIDs.count)
+    }
 }

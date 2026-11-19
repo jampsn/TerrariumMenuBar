@@ -247,6 +247,12 @@ final class StageAnimator: ObservableObject {
             case .patrol: return 5.5
             case .idle, .petted: return 3.0
             }
+        case .ladybug:
+            switch c.behavior {
+            case .eating, .seekingFood, .sleep, .idle, .petted: return 0.0
+            case .startle: return 7.5
+            case .patrol: return c.prefersMidwaterSwim ? 5.5 : 0.0
+            }
         default:
             return 0.0
         }
@@ -281,6 +287,8 @@ final class StageAnimator: ObservableObject {
             bobOffset = sin(c.swimPhase * 0.9) * 0.5
         } else if c.kind == .blueMorpho {
             bobOffset = sin(c.swimPhase * 1.6) * 1.2
+        } else if c.kind == .ladybug && c.smoothBaseGZ > 0.8 {
+            bobOffset = sin(c.swimPhase * 2.2) * 0.9
         } else {
             bobOffset = 0.0
         }
@@ -547,7 +555,7 @@ final class StageAnimator: ObservableObject {
 
         case .idle:
             if shouldSeekFood(kind: c.kind, state: state) {
-                if c.kind == .cherryShrimp { c.prefersMidwaterSwim = false }
+                if c.kind == .cherryShrimp || c.kind == .ladybug { c.prefersMidwaterSwim = false }
                 let reserved = reservedFoodSlots(excluding: idx)
                 let path = GridPathfinder.findPathToFoodBowl(from: currentGrid, blocked: blocked, reservedSlots: reserved, biome: state.currentBiome)
                 if !path.isEmpty {
@@ -566,6 +574,9 @@ final class StageAnimator: ObservableObject {
                     if c.kind == .cherryShrimp {
                         // 樱花米虾：~80% 贴底觅食爬行，~20% 优雅升入半水中飘游转场
                         c.prefersMidwaterSwim = (Double.random(in: 0...1) < 0.22)
+                    } else if c.kind == .ladybug {
+                        // 七星瓢虫：~35% 概率起飞低空振翅巡游，~65% 地面爬行
+                        c.prefersMidwaterSwim = (Double.random(in: 0...1) < 0.35)
                     }
                     c.behavior = .patrol
                     c.path = patrolPath
@@ -587,7 +598,7 @@ final class StageAnimator: ObservableObject {
                 break
             }
             if c.behavior == .patrol && shouldSeekFood(kind: c.kind, state: state) && c.hopProgress == 0 {
-                if c.kind == .cherryShrimp { c.prefersMidwaterSwim = false }
+                if c.kind == .cherryShrimp || c.kind == .ladybug { c.prefersMidwaterSwim = false }
                 let reserved = reservedFoodSlots(excluding: idx)
                 let foodPath = GridPathfinder.findPathToFoodBowl(from: currentGrid, blocked: blocked, reservedSlots: reserved, biome: state.currentBiome)
                 if !foodPath.isEmpty {

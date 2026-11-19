@@ -77,6 +77,9 @@ final class TerrariumState: ObservableObject {
     @Published var renameTankDraft: String = ""
     @Published var renamingCritterKind: CritterKind? = nil
     @Published var renameCritterDraft: String = ""
+    @Published var unlockedAchievementIDs: [String] = []
+    @Published var equippedTitleID: String? = nil
+    @Published var isShowingAchievementsInCodexTab: Bool = false
 
     let vfxSubject = PassthroughSubject<VFXEvent, Never>()
 
@@ -1349,9 +1352,23 @@ final class TerrariumState: ObservableObject {
 
     private func commitStateChange() {
         let now = Date()
+        let newAchs = TerrariumSimulation.evaluateAchievements(data: &saveData)
+        if let first = newAchs.first {
+            let bonusSum = newAchs.reduce(0) { $0 + $1.rewardPoints }
+            bannerNotice = "🏅 解锁成就称号「\(first.title)」+\(bonusSum) 生态点"
+        }
         saveData.lastSavedAt = now
         syncPublishedFromSaveData(now: now)
         persistence.save(saveData)
+    }
+
+    func equipTitle(_ achievementID: String) {
+        guard saveData.unlockedAchievementIDs.contains(achievementID) else { return }
+        saveData.equippedTitleID = achievementID
+        commitStateChange()
+        if let def = TerrariumConfig.defaultAchievements.first(where: { $0.id == achievementID }) {
+            bannerNotice = "已佩戴称号「\(def.title)」"
+        }
     }
 
     private func syncPublishedFromSaveData(now: Date = Date()) {
@@ -1383,10 +1400,12 @@ final class TerrariumState: ObservableObject {
             copy.unlocked = unlockedCodexSet.contains(entry.id)
             return copy
         }
-        codexMilestoneTitle = TerrariumConfig.codexMilestoneTitle(unlockedCount: unlockedCodexSet.count)
+        codexMilestoneTitle = TerrariumConfig.displayTitle(for: saveData)
         unlockedFrameSkinIDs = saveData.unlockedFrameSkinIDs
         activeFrameSkin = TankFrameSkin(rawValue: saveData.activeFrameSkinID) ?? .classic
         unlockedCodexIDs = saveData.unlockedCodexIDs
+        unlockedAchievementIDs = saveData.unlockedAchievementIDs
+        equippedTitleID = saveData.equippedTitleID
         isResonanceActive = TerrariumConfig.ecosystemResonance(containers: saveData.containers).isActive
         twilightIntensity = TerrariumConfig.twilightTintIntensity(for: now)
 

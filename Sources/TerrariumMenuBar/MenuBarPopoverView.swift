@@ -1341,20 +1341,83 @@ struct MenuBarPopoverView: View {
     private var codexTabContent: some View {
         ScrollView {
             VStack(spacing: 6) {
-                HStack {
-                    Text("收集称号：\(state.codexMilestoneTitle)")
+                HStack(spacing: 6) {
+                    Text("当前佩戴：\(state.codexMilestoneTitle)")
                         .font(.system(size: 11.5, weight: .bold, design: .monospaced))
                         .foregroundColor(adminAmber)
                     Spacer()
-                    Text("\(state.unlockedCodexCount) / \(state.codexEntries.count)")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(textMain)
+                    Button("物种图鉴 (\(state.unlockedCodexCount)/\(state.codexEntries.count))") {
+                        state.isShowingAchievementsInCodexTab = false
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(!state.isShowingAchievementsInCodexTab ? accentGreen : bgCard)
+                    .foregroundColor(!state.isShowingAchievementsInCodexTab ? .white : textMuted)
+                    .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+
+                    Button("成就称号 (\(state.unlockedAchievementIDs.count)/\(TerrariumConfig.defaultAchievements.count))") {
+                        state.isShowingAchievementsInCodexTab = true
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(state.isShowingAchievementsInCodexTab ? accentGreen : bgCard)
+                    .foregroundColor(state.isShowingAchievementsInCodexTab ? .white : textMuted)
+                    .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
                 }
                 .padding(8)
                 .background(bgHeader)
                 .overlay(Rectangle().stroke(borderCol, lineWidth: 1.5))
 
-                ForEach(state.codexEntries) { entry in
+                if state.isShowingAchievementsInCodexTab {
+                    ForEach(TerrariumConfig.defaultAchievements) { ach in
+                        let isUnlocked = state.unlockedAchievementIDs.contains(ach.id)
+                        let isEquipped = (state.codexMilestoneTitle == ach.title)
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack(spacing: 6) {
+                                    Text("\(isUnlocked ? "🏅" : "🔒") \(ach.title)")
+                                        .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+                                        .foregroundColor(isUnlocked ? adminAmber : textMain)
+                                    Text(ach.category)
+                                        .font(.system(size: 9.5, design: .monospaced))
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 1)
+                                        .background(bgCard)
+                                        .foregroundColor(textMuted)
+                                    Text("+\(ach.rewardPoints) 点")
+                                        .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                                        .foregroundColor(isUnlocked ? accentGreen : textMuted)
+                                }
+                                Text("条件：\(ach.conditionDesc)")
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(textMuted)
+                            }
+                            Spacer()
+                            if isUnlocked {
+                                Button(isEquipped ? "佩戴中" : "佩戴") {
+                                    state.equipTitle(ach.id)
+                                }
+                                .buttonStyle(.plain)
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(isEquipped ? adminAmber : accentGreen)
+                                .foregroundColor(isEquipped ? .black : .white)
+                                .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                                .disabled(isEquipped)
+                            }
+                        }
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(bgHeader.opacity(isUnlocked ? 1 : 0.6))
+                        .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                    }
+                } else {
+                    ForEach(state.codexEntries) { entry in
                     VStack(alignment: .leading, spacing: 3) {
                         HStack {
                             Text("\(entry.unlocked ? "✅" : "🔒") \(entry.name) · \(entry.category)")
@@ -1387,6 +1450,7 @@ struct MenuBarPopoverView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(bgHeader.opacity(entry.unlocked ? 1 : 0.6))
                     .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                    }
                 }
             }
         }

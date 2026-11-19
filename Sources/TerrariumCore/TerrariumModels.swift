@@ -525,7 +525,24 @@ public struct TerrariumContainer: Identifiable, Codable, Equatable {
     }
 }
 
-/// 全局持久化存档容器（schemaVersion = 4：多实例自由购置容器 + 共享点数与图鉴，无损兼容 v3）
+/// 组合式成就与收集称号定义
+public struct AchievementDefinition: Identifiable, Equatable {
+    public let id: String
+    public let title: String
+    public let category: String
+    public let conditionDesc: String
+    public let rewardPoints: Int
+
+    public init(id: String, title: String, category: String, conditionDesc: String, rewardPoints: Int) {
+        self.id = id
+        self.title = title
+        self.category = category
+        self.conditionDesc = conditionDesc
+        self.rewardPoints = rewardPoints
+    }
+}
+
+/// 全局持久化存档容器（schemaVersion = 5：多实例自由购置容器 + 共享点数与图鉴 + 边框皮肤 + 成就称号，无损兼容 v1~v4）
 public struct TerrariumSaveData: Codable, Equatable {
     public var schemaVersion: Int
     public var containers: [TerrariumContainer]
@@ -537,11 +554,14 @@ public struct TerrariumSaveData: Codable, Equatable {
     public var lastKnownLocalCity: String?
     public var unlockedFrameSkinIDs: [String]
     public var activeFrameSkinID: String
+    public var unlockedAchievementIDs: [String]
+    public var equippedTitleID: String?
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, containers, activeContainerID, ecoPoints, unlockedCodexIDs, lastSavedAt
         case lastKnownLocalTempC, lastKnownLocalCity
         case unlockedFrameSkinIDs, activeFrameSkinID
+        case unlockedAchievementIDs, equippedTitleID
         // v3 兼容迁移键
         case currentBiome, unlockedBiomes, terrariums
     }
@@ -556,7 +576,9 @@ public struct TerrariumSaveData: Codable, Equatable {
         lastKnownLocalTempC: Int? = nil,
         lastKnownLocalCity: String? = nil,
         unlockedFrameSkinIDs: [String] = [TankFrameSkin.classic.rawValue],
-        activeFrameSkinID: String = TankFrameSkin.classic.rawValue
+        activeFrameSkinID: String = TankFrameSkin.classic.rawValue,
+        unlockedAchievementIDs: [String] = [],
+        equippedTitleID: String? = nil
     ) {
         let initialContainers = containers ?? [
             TerrariumContainer(
@@ -574,6 +596,8 @@ public struct TerrariumSaveData: Codable, Equatable {
         self.lastKnownLocalCity = lastKnownLocalCity
         self.unlockedFrameSkinIDs = unlockedFrameSkinIDs
         self.activeFrameSkinID = activeFrameSkinID
+        self.unlockedAchievementIDs = unlockedAchievementIDs
+        self.equippedTitleID = equippedTitleID
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -588,6 +612,8 @@ public struct TerrariumSaveData: Codable, Equatable {
         try c.encodeIfPresent(lastKnownLocalCity, forKey: .lastKnownLocalCity)
         try c.encode(unlockedFrameSkinIDs, forKey: .unlockedFrameSkinIDs)
         try c.encode(activeFrameSkinID, forKey: .activeFrameSkinID)
+        try c.encode(unlockedAchievementIDs, forKey: .unlockedAchievementIDs)
+        try c.encodeIfPresent(equippedTitleID, forKey: .equippedTitleID)
     }
 
     public init(from decoder: Decoder) throws {
@@ -609,6 +635,8 @@ public struct TerrariumSaveData: Codable, Equatable {
             self.lastKnownLocalCity = try c.decodeIfPresent(String.self, forKey: .lastKnownLocalCity)
             self.unlockedFrameSkinIDs = try c.decodeIfPresent([String].self, forKey: .unlockedFrameSkinIDs) ?? [TankFrameSkin.classic.rawValue]
             self.activeFrameSkinID = try c.decodeIfPresent(String.self, forKey: .activeFrameSkinID) ?? TankFrameSkin.classic.rawValue
+            self.unlockedAchievementIDs = try c.decodeIfPresent([String].self, forKey: .unlockedAchievementIDs) ?? []
+            self.equippedTitleID = try c.decodeIfPresent(String.self, forKey: .equippedTitleID)
         } else if decodedVersion == 3,
                   let map = try c.decodeIfPresent([String: TerrariumInstanceState].self, forKey: .terrariums) {
             let curBiome = try c.decodeIfPresent(TerrariumBiome.self, forKey: .currentBiome) ?? .meadow
@@ -635,6 +663,8 @@ public struct TerrariumSaveData: Codable, Equatable {
             self.lastSavedAt = try c.decodeIfPresent(Date.self, forKey: .lastSavedAt) ?? now
             self.unlockedFrameSkinIDs = [TankFrameSkin.classic.rawValue]
             self.activeFrameSkinID = TankFrameSkin.classic.rawValue
+            self.unlockedAchievementIDs = []
+            self.equippedTitleID = nil
         } else {
             let legacyPoints = try c.decodeIfPresent(Int.self, forKey: .ecoPoints) ?? 2
             let first = TerrariumContainer(customName: "苔原缸 #1", instance: TerrariumInstanceState.empty(biome: .meadow, now: now))
@@ -646,6 +676,8 @@ public struct TerrariumSaveData: Codable, Equatable {
             self.lastSavedAt = now
             self.unlockedFrameSkinIDs = [TankFrameSkin.classic.rawValue]
             self.activeFrameSkinID = TankFrameSkin.classic.rawValue
+            self.unlockedAchievementIDs = []
+            self.equippedTitleID = nil
         }
     }
 }

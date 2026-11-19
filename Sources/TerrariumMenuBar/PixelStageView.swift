@@ -1021,6 +1021,9 @@ struct PixelStageView: View {
     }
 
     private func critterFrameIndex(for c: CritterRuntime, globalTick: Int) -> Int {
+        if c.kind == .ladybug && c.gz > 1.2 && c.behavior != .sleep {
+            return 10 + ((globalTick / 2) % 2)
+        }
         switch c.kind {
         case .treeFrog, .dartFrog, .redEyedFrog:
             switch c.behavior {

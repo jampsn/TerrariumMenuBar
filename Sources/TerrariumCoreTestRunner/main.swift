@@ -586,6 +586,52 @@ runTest("test_v030_phase2_resonance_twilight_andNarrative") {
     check(rfUnlocked.contains("orchid_bee"), "雨林日间高湿+兰花应解锁翡翠兰花蜂")
 }
 
+runTest("test_guaranteedFirstPlantSpawn_andDynamicPool") {
+    var meadow = TerrariumInstanceState.empty(biome: .meadow)
+    meadow.humidity = 65
+    meadow.enabledDecorIDs = ["driftwood"]
+    meadow.plants = [
+        PlantInstance(speciesID: "moss", coord: GridCoord(col: 1, row: 1), stage: .mature),
+        PlantInstance(speciesID: "fern", coord: GridCoord(col: 2, row: 2), stage: .mature)
+    ]
+
+    // 即使随机骰子返回 0.99，缺失的前置三叶草与红菇也应逐次必出首株
+    let p1 = TerrariumSimulation.attemptRandomPlantSpawn(instance: &meadow, randomUnit: { 0.99 })
+    check(p1?.speciesID == "clover", "苔原缺失三叶草且满足条件时应 100% 首株必出，实际=\(p1?.speciesID ?? "nil")")
+
+    let p2 = TerrariumSimulation.attemptRandomPlantSpawn(instance: &meadow, randomUnit: { 0.99 })
+    check(p2?.speciesID == "red_shroom", "拥有沉木且缺失红菇时应继续必出首株红菇，实际=\(p2?.speciesID ?? "nil")")
+
+    // 首株均已齐备后，randomUnit=0.99 应正常走概率过滤返回 nil，保留后续随机性
+    let p3 = TerrariumSimulation.attemptRandomPlantSpawn(instance: &meadow, randomUnit: { 0.99 })
+    check(p3 == nil, "全部达标物种均已有首株后，高随机骰子应走概率分支而非强行必出")
+}
+
+runTest("test_achievements_14Titles_andIdempotentRewards") {
+    let achs = TerrariumConfig.defaultAchievements
+    check(achs.count == 14, "组合式成就称号总数应为 14 项，实际=\(achs.count)")
+    check(achs.allSatisfy { (1...3).contains($0.rewardPoints) }, "所有成就一次性奖励必须在 1~3 生态点范围内")
+
+    var save = TerrariumSaveData(ecoPoints: 10)
+    save.unlockedCodexIDs = ["tree_frog", "dart_frog", "red_eyed_frog", "sand_gecko", "sand_scorpion", "horned_toad"]
+    save.containers[0].instance.critters = [
+        CritterPersistentState(kind: .treeFrog, residency: .resident, coord: GridCoord(col: 3, row: 3), affinity: 100)
+    ]
+    let newly = TerrariumSimulation.evaluateAchievements(data: &save)
+    check(newly.contains(where: { $0.id == "ach_frog_chorus" }), "集齐三蛙应解锁「蛙鸣三重奏」")
+    check(newly.contains(where: { $0.id == "ach_desert_lords" }), "集齐三沙地霸主应解锁「沙海三霸主」")
+    check(newly.contains(where: { $0.id == "ach_first_soulmate" }), "拥有 Lv.5 挚友应解锁「莫逆之交」")
+    let expectedGain = newly.reduce(0) { $0 + $1.rewardPoints }
+    check(save.ecoPoints == 10 + expectedGain, "首次解锁成就应发放对应一次性生态点")
+
+    // 重复评估幂等校验
+    let repeatUnlocked = TerrariumSimulation.evaluateAchievements(data: &save)
+    check(repeatUnlocked.isEmpty && save.ecoPoints == 10 + expectedGain, "已解锁成就不得重复发点")
+
+    save.equippedTitleID = "ach_frog_chorus"
+    check(TerrariumConfig.displayTitle(for: save) == "🐸 蛙鸣三重奏", "佩戴称号后应展示对应自定义称号")
+}
+
 print("\nSummary: \(passedCount) passed, \(failedCount) failed.")
 if failedCount > 0 {
     Foundation.exit(1)

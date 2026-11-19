@@ -23,7 +23,7 @@
      - `StageAnimator.swift`：精灵动画状态机、VFX 粒子预算与轻抚/气泡/露水帧驱动
      - `LocalWeatherService.swift`：本地实时气温联动服务
      - `PixelAssetLoader.swift` & `Resources/Pixel/`：像素精灵表与静态图资产加载
-  3. `Sources/TerrariumCoreTestRunner/`：无头单元测试运行器（`main.swift`，当前 19 项核心测试）
+  3. `Sources/TerrariumCoreTestRunner/`：无头单元测试运行器（`main.swift`，当前 21 项核心测试）
   4. `build_app.sh`：原生 `.app` 编译、资源拷贝（含 `AppIcon.icns`）与签名打包脚本（默认输出 `/tmp/terrarium-build/TerrariumMenuBar.app`）
 
 ---

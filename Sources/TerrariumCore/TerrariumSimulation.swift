@@ -774,128 +774,146 @@ public enum TerrariumSimulation {
         }
         guard !freeCoords.isEmpty else { return nil }
 
-        // 依据生态缸地貌、已有植物梯队与温湿度选取候选植物
-        let candidateSpecies: String
-        let baseProb: Double
+        // 依据生态缸地貌、已有植物梯队与温湿度构建候选池：
+        // 1) 特定前置/组合植物在缸内数量为 0 时，只要达标即 100% 首株必出（消除看脸阻塞）
+        // 2) 首株齐备后，从所有满足条件且未满额的物种中按动态权重池随机萌发
+        struct PlantCandidate {
+            let speciesID: String
+            let count: Int
+            let cap: Int
+            let weight: Double
+            let baseProb: Double
+        }
+
+        func countOf(_ id: String) -> Int {
+            instance.plants.filter { $0.speciesID == id && $0.stage != .withered }.count
+        }
+
         let hasWoodBoost: Bool
+        var candidates: [PlantCandidate] = []
 
         switch instance.biome {
         case .meadow:
             hasWoodBoost = instance.enabledDecorIDs.contains("driftwood")
-            let mossCount = instance.plants.filter { $0.speciesID == "moss" && $0.stage != .withered }.count
-            let fernCount = instance.plants.filter { $0.speciesID == "fern" && $0.stage != .withered }.count
+            let mossCount = countOf("moss")
+            let fernCount = countOf("fern")
             let effectiveTemp = instance.enabledDecorIDs.contains("boulder") ? (instance.temperature - 1) : instance.temperature
 
-            if mossCount == 0 {
-                guard instance.humidity >= 45 else { return nil }
-                candidateSpecies = "moss"
-                baseProb = 1.0 // 冷启动首株破冰必萌发
-            } else if effectiveTemp <= 19 && instance.humidity >= 75 {
-                candidateSpecies = "glow_shroom"
-                baseProb = 0.20
-            } else if fernCount >= 1 && instance.enabledDecorIDs.contains("shallow_pool") && instance.humidity >= 72 && (instance.plants.filter { $0.speciesID == "sundew" }.count < 2) {
-                candidateSpecies = "sundew"
-                baseProb = 0.22
-            } else if mossCount >= 1 && instance.humidity >= 60 && (instance.plants.filter { $0.speciesID == "red_shroom" }.count < 2) {
-                candidateSpecies = "red_shroom"
-                baseProb = 0.22
-            } else if mossCount >= 2 && instance.humidity >= 62 && (instance.plants.filter { $0.speciesID == "fern" }.count < 3) {
-                candidateSpecies = "fern"
-                baseProb = 0.24
-            } else if instance.humidity >= 68 && (instance.plants.filter { $0.speciesID == "clover" }.count < 3) {
-                candidateSpecies = "clover"
-                baseProb = 0.24
-            } else if instance.humidity >= 45 {
-                candidateSpecies = "moss"
-                baseProb = 0.20
-            } else {
-                return nil
+            if instance.humidity >= 45 {
+                candidates.append(PlantCandidate(speciesID: "moss", count: mossCount, cap: TerrariumConfig.maxPlantsCap, weight: 1.4, baseProb: 0.24))
             }
+            if mossCount >= 1 && instance.humidity >= 58 {
+                candidates.append(PlantCandidate(speciesID: "fern", count: fernCount, cap: 3, weight: 1.1, baseProb: 0.26))
+            }
+            if mossCount >= 1 && instance.humidity >= 62 {
+                candidates.append(PlantCandidate(speciesID: "clover", count: countOf("clover"), cap: 3, weight: 1.1, baseProb: 0.26))
+            }
+            if mossCount >= 1 && instance.enabledDecorIDs.contains("driftwood") && instance.humidity >= 60 {
+                candidates.append(PlantCandidate(speciesID: "red_shroom", count: countOf("red_shroom"), cap: 2, weight: 0.8, baseProb: 0.22))
+            }
+            if fernCount >= 1 && instance.enabledDecorIDs.contains("shallow_pool") && instance.humidity >= 72 {
+                candidates.append(PlantCandidate(speciesID: "sundew", count: countOf("sundew"), cap: 2, weight: 0.8, baseProb: 0.22))
+            }
+            if effectiveTemp <= 19 && instance.humidity >= 75 {
+                candidates.append(PlantCandidate(speciesID: "glow_shroom", count: countOf("glow_shroom"), cap: 2, weight: 0.75, baseProb: 0.22))
+            }
+
         case .sand:
             hasWoodBoost = instance.enabledDecorIDs.contains("sand_wood")
-            let succCount = instance.plants.filter { $0.speciesID == "succulent" && $0.stage != .withered }.count
-            let aloeCount = instance.plants.filter { $0.speciesID == "aloe" && $0.stage != .withered }.count
-            if succCount == 0 {
-                guard instance.humidity <= 55 else { return nil }
-                candidateSpecies = "succulent"
-                baseProb = 1.0 // 沙地缸冷启动首株必萌发
-            } else if aloeCount >= 1 && instance.temperature >= 25 && (instance.plants.filter { $0.speciesID == "agave" }.count < 2) {
-                candidateSpecies = "agave"
-                baseProb = 0.20
-            } else if succCount >= 1 && instance.humidity <= 45 && (instance.plants.filter { $0.speciesID == "lithops" }.count < 2) {
-                candidateSpecies = "lithops"
-                baseProb = 0.22
-            } else if instance.temperature >= 25 && instance.humidity <= 50 && (instance.plants.filter { $0.speciesID == "cactus" }.count < 2) {
-                candidateSpecies = "cactus"
-                baseProb = 0.22
-            } else if (28...55).contains(instance.humidity) && (instance.plants.filter { $0.speciesID == "aloe" }.count < 2) {
-                candidateSpecies = "aloe"
-                baseProb = 0.24
-            } else if instance.humidity <= 55 {
-                candidateSpecies = "succulent"
-                baseProb = 0.18
-            } else {
-                return nil
+            let succCount = countOf("succulent")
+            let aloeCount = countOf("aloe")
+
+            if instance.humidity <= 55 {
+                candidates.append(PlantCandidate(speciesID: "succulent", count: succCount, cap: TerrariumConfig.maxPlantsCap, weight: 1.4, baseProb: 0.22))
             }
+            if succCount >= 1 && (28...55).contains(instance.humidity) {
+                candidates.append(PlantCandidate(speciesID: "aloe", count: aloeCount, cap: 2, weight: 1.0, baseProb: 0.25))
+            }
+            if succCount >= 1 && instance.temperature >= 25 && instance.humidity <= 50 {
+                candidates.append(PlantCandidate(speciesID: "cactus", count: countOf("cactus"), cap: 2, weight: 0.9, baseProb: 0.24))
+            }
+            if succCount >= 1 && instance.humidity <= 45 {
+                candidates.append(PlantCandidate(speciesID: "lithops", count: countOf("lithops"), cap: 2, weight: 0.85, baseProb: 0.22))
+            }
+            if aloeCount >= 1 && instance.temperature >= 25 {
+                candidates.append(PlantCandidate(speciesID: "agave", count: countOf("agave"), cap: 2, weight: 0.8, baseProb: 0.22))
+            }
+
         case .rainforest:
             hasWoodBoost = instance.enabledDecorIDs.contains("rainforest_vine")
-            let monsteraCount = instance.plants.filter { $0.speciesID == "monstera" && $0.stage != .withered }.count
-            let bromeliadCount = instance.plants.filter { $0.speciesID == "bromeliad" && $0.stage != .withered }.count
-            if monsteraCount == 0 {
-                guard instance.humidity >= 60 else { return nil }
-                candidateSpecies = "monstera"
-                baseProb = 1.0 // 雨林缸冷启动首株必萌发龟背竹
-            } else if monsteraCount >= 1 && instance.humidity >= 74 && (instance.plants.filter { $0.speciesID == "pitcher_plant" }.count < 2) {
-                candidateSpecies = "pitcher_plant"
-                baseProb = 0.22
-            } else if bromeliadCount >= 1 && instance.humidity >= 68 && (instance.plants.filter { $0.speciesID == "calathea" }.count < 2) {
-                candidateSpecies = "calathea"
-                baseProb = 0.24
-            } else if instance.temperature >= 24 && instance.humidity >= 75 && (instance.plants.filter { $0.speciesID == "orchid" }.count < 2) {
-                candidateSpecies = "orchid"
-                baseProb = 0.24
-            } else if instance.humidity >= 72 && (instance.plants.filter { $0.speciesID == "bromeliad" }.count < 3) {
-                candidateSpecies = "bromeliad"
-                baseProb = 0.28
-            } else if instance.humidity >= 60 {
-                candidateSpecies = "monstera"
-                baseProb = 0.20
-            } else {
-                return nil
+            let monsteraCount = countOf("monstera")
+            let bromeliadCount = countOf("bromeliad")
+
+            if instance.humidity >= 60 {
+                candidates.append(PlantCandidate(speciesID: "monstera", count: monsteraCount, cap: TerrariumConfig.maxPlantsCap, weight: 1.4, baseProb: 0.24))
             }
+            if monsteraCount >= 1 && instance.humidity >= 70 {
+                candidates.append(PlantCandidate(speciesID: "bromeliad", count: bromeliadCount, cap: 3, weight: 1.1, baseProb: 0.28))
+            }
+            if monsteraCount >= 1 && instance.temperature >= 24 && instance.humidity >= 74 {
+                candidates.append(PlantCandidate(speciesID: "orchid", count: countOf("orchid"), cap: 2, weight: 0.85, baseProb: 0.24))
+            }
+            if monsteraCount >= 1 && instance.humidity >= 74 {
+                candidates.append(PlantCandidate(speciesID: "pitcher_plant", count: countOf("pitcher_plant"), cap: 2, weight: 0.8, baseProb: 0.22))
+            }
+            if bromeliadCount >= 1 && instance.humidity >= 68 {
+                candidates.append(PlantCandidate(speciesID: "calathea", count: countOf("calathea"), cap: 2, weight: 0.9, baseProb: 0.24))
+            }
+
         case .aquatic:
             hasWoodBoost = instance.enabledDecorIDs.contains("aquatic_driftwood")
-            let marimoCount = instance.plants.filter { $0.speciesID == "marimo" && $0.stage != .withered }.count
-            let anubiasCount = instance.plants.filter { $0.speciesID == "anubias" && $0.stage != .withered }.count
-            if marimoCount == 0 {
-                guard instance.humidity >= 55 else { return nil }
-                candidateSpecies = "marimo"
-                baseProb = 1.0 // 鱼缸冷启动首株必生莫斯藻球
-            } else if anubiasCount >= 1 && instance.temperature >= 23 && instance.humidity >= 70 && (instance.plants.filter { $0.speciesID == "red_ludwigia" }.count < 2) {
-                candidateSpecies = "red_ludwigia"
-                baseProb = 0.22
-            } else if marimoCount >= 1 && instance.humidity >= 60 && (instance.plants.filter { $0.speciesID == "vallisneria" }.count < 2) {
-                candidateSpecies = "vallisneria"
-                baseProb = 0.24
-            } else if instance.temperature >= 23 && instance.humidity >= 72 && (instance.plants.filter { $0.speciesID == "lotus" }.count < 2) {
-                candidateSpecies = "lotus"
-                baseProb = 0.24
-            } else if instance.humidity >= 65 && (instance.plants.filter { $0.speciesID == "anubias" }.count < 3) {
-                candidateSpecies = "anubias"
-                baseProb = 0.28
-            } else if instance.humidity >= 55 {
-                candidateSpecies = "marimo"
-                baseProb = 0.20
-            } else {
-                return nil
+            let marimoCount = countOf("marimo")
+            let anubiasCount = countOf("anubias")
+
+            if instance.humidity >= 55 {
+                candidates.append(PlantCandidate(speciesID: "marimo", count: marimoCount, cap: TerrariumConfig.maxPlantsCap, weight: 1.4, baseProb: 0.24))
+            }
+            if marimoCount >= 1 && instance.humidity >= 65 {
+                candidates.append(PlantCandidate(speciesID: "anubias", count: anubiasCount, cap: 3, weight: 1.1, baseProb: 0.28))
+            }
+            if marimoCount >= 1 && instance.humidity >= 60 {
+                candidates.append(PlantCandidate(speciesID: "vallisneria", count: countOf("vallisneria"), cap: 3, weight: 1.0, baseProb: 0.24))
+            }
+            if marimoCount >= 1 && instance.temperature >= 23 && instance.humidity >= 72 {
+                candidates.append(PlantCandidate(speciesID: "lotus", count: countOf("lotus"), cap: 2, weight: 0.85, baseProb: 0.24))
+            }
+            if anubiasCount >= 1 && instance.temperature >= 23 && instance.humidity >= 70 {
+                candidates.append(PlantCandidate(speciesID: "red_ludwigia", count: countOf("red_ludwigia"), cap: 2, weight: 0.8, baseProb: 0.22))
             }
         }
+
+        guard !candidates.isEmpty else { return nil }
+
+        let chosen: PlantCandidate
+        let isGuaranteedFirstSpawn: Bool
+        if let firstMissing = candidates.first(where: { $0.count == 0 }) {
+            chosen = firstMissing
+            isGuaranteedFirstSpawn = true
+        } else {
+            let pool = candidates.filter { $0.count < $0.cap }
+            guard !pool.isEmpty else { return nil }
+            let totalWeight = pool.reduce(0.0) { $0 + $1.weight }
+            var roll = randomUnit() * totalWeight
+            var picked = pool[0]
+            for item in pool {
+                roll -= item.weight
+                if roll <= 0 {
+                    picked = item
+                    break
+                }
+            }
+            chosen = picked
+            isGuaranteedFirstSpawn = false
+        }
+
+        let candidateSpecies = chosen.speciesID
+        let baseProb = chosen.baseProb
 
         let woodMult = hasWoodBoost ? 1.5 : 1.0
         var extraSpawnMult = 1.0
         switch instance.biome {
         case .meadow:
-            if candidateSpecies == "glow_shroom" && instance.enabledDecorIDs.contains("meadow_mushroom_log") {
+            if (candidateSpecies == "glow_shroom" || candidateSpecies == "red_shroom") && instance.enabledDecorIDs.contains("meadow_mushroom_log") {
                 extraSpawnMult = 1.40
             }
         case .sand:
@@ -912,7 +930,9 @@ public enum TerrariumSimulation {
             }
         }
         let densityFactor = 1.0 - Double(instance.plants.count) / Double(TerrariumConfig.maxPlantsCap)
-        let prob = min(1.0, max(0.0, baseProb * woodMult * extraSpawnMult * spawnRateMultiplier * (instance.plants.isEmpty ? 1.0 : densityFactor)))
+        let prob = isGuaranteedFirstSpawn
+            ? 1.0
+            : min(1.0, max(0.0, baseProb * woodMult * extraSpawnMult * spawnRateMultiplier * (instance.plants.isEmpty ? 1.0 : densityFactor)))
 
         guard randomUnit() <= prob, let chosenCoord = pickCoord(freeCoords) else {
             return nil
@@ -1004,5 +1024,42 @@ public enum TerrariumSimulation {
         }
 
         return result
+    }
+
+    /// 评估组合式成就与称号解锁，首次达成时一次性发放 +1~+3 生态点（绝不重复发点）
+    @discardableResult
+    public static func evaluateAchievements(data: inout TerrariumSaveData) -> [AchievementDefinition] {
+        let codex = Set(data.unlockedCodexIDs)
+        let biomes = Set(data.containers.map { $0.instance.biome })
+        let allCritters = data.containers.flatMap { $0.instance.critters }
+        let soulmateCount = allCritters.filter { TerrariumConfig.affinityStage(for: $0.affinity) == .soulmate }.count
+        var already = Set(data.unlockedAchievementIDs)
+        var newlyUnlocked: [AchievementDefinition] = []
+
+        func check(_ id: String, _ condition: Bool) {
+            guard condition, !already.contains(id),
+                  let def = TerrariumConfig.defaultAchievements.first(where: { $0.id == id }) else { return }
+            already.insert(id)
+            data.unlockedAchievementIDs.append(id)
+            data.ecoPoints += def.rewardPoints
+            newlyUnlocked.append(def)
+        }
+
+        check("ach_codex_10", codex.count >= 10)
+        check("ach_codex_20", codex.count >= 20)
+        check("ach_codex_33", codex.count >= 33)
+        check("ach_codex_42", codex.count >= 42)
+        check("ach_codex_52", codex.count >= 52)
+        check("ach_four_biomes", biomes.count >= TerrariumBiome.allCases.count)
+        check("ach_aerial_collector", Set(["firefly", "moon_moth", "dragonfly", "luna_cicada", "antlion_lacewing", "orchid_bee"]).isSubset(of: codex))
+        check("ach_frog_chorus", Set(["tree_frog", "dart_frog", "red_eyed_frog"]).isSubset(of: codex))
+        check("ach_desert_lords", Set(["sand_gecko", "sand_scorpion", "horned_toad"]).isSubset(of: codex))
+        check("ach_carnivore_flora", Set(["sundew", "pitcher_plant"]).isSubset(of: codex))
+        check("ach_aquatic_jewels", Set(["cherry_shrimp", "crystal_shrimp", "lotus"]).isSubset(of: codex))
+        check("ach_first_soulmate", soulmateCount >= 1)
+        check("ach_three_soulmates", soulmateCount >= 3)
+        check("ach_skin_collector", data.unlockedFrameSkinIDs.count >= 3)
+
+        return newlyUnlocked
     }
 }
