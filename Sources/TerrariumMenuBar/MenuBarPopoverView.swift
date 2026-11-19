@@ -82,13 +82,13 @@ struct MenuBarPopoverView: View {
                     terrariumTabContent
                 case .decor:
                     decorTabContent
-                        .frame(height: 500)
+                        .frame(height: 540)
                 case .critters:
                     crittersTabContent
-                        .frame(height: 500)
+                        .frame(height: 540)
                 case .codex:
                     codexTabContent
-                        .frame(height: 500)
+                        .frame(height: 540)
                 }
             }
             .padding(12)
@@ -145,8 +145,10 @@ struct MenuBarPopoverView: View {
                 renameCritterOverlay(kind: targetKind)
             }
         }
-        .frame(width: 472)
+        .frame(width: 472, alignment: .top)
+        .fixedSize(horizontal: false, vertical: true)
         .background(bgMain)
+        .background(MenuBarWindowTopPinHelper(triggerKey: "\(state.currentTab.rawValue)_\(state.isAdminMode)_\(state.isShowingBuyTankSheet)_\(state.containers.count)_\(state.selectedPlantID?.uuidString ?? "")_\(state.selectedDecorID ?? "")"))
         .preferredColorScheme(.dark)
     }
 
@@ -1453,6 +1455,75 @@ struct MenuBarPopoverView: View {
                     }
                 }
             }
+        }
+    }
+}
+
+/// 锁定 macOS MenuBarExtra(.window) 顶边位置并同步精确收缩/扩展 NSWindow 高度，彻底消除切 Tab 时窗口不收缩导致的居中下移留白。
+private struct MenuBarWindowTopPinHelper: NSViewRepresentable {
+    let triggerKey: String
+
+    final class Coordinator {
+        var observers: [NSObjectProtocol] = []
+        var anchoredTopY: CGFloat?
+
+        deinit {
+            for obs in observers {
+                NotificationCenter.default.removeObserver(obs)
+            }
+        }
+
+        func syncWindowFrame(from view: NSView) {
+            guard let window = view.window,
+                  let screen = window.screen ?? NSScreen.main else { return }
+            let maxSafeTop = screen.visibleFrame.maxY - 2.0
+            if anchoredTopY == nil || abs((anchoredTopY ?? 0) - maxSafeTop) > 40.0 {
+                anchoredTopY = (window.frame.maxY >= maxSafeTop - 20.0) ? min(window.frame.maxY, maxSafeTop) : maxSafeTop
+            }
+            guard let targetTop = anchoredTopY else { return }
+
+            let contentH = view.bounds.height
+            guard contentH > 200 else { return }
+            let chromeH = max(0, window.frame.height - (window.contentView?.bounds.height ?? window.frame.height))
+            let desiredWinH = contentH + chromeH
+            let desiredOriginY = targetTop - desiredWinH
+
+            if abs(window.frame.height - desiredWinH) > 1.0 || abs(window.frame.origin.y - desiredOriginY) > 0.5 {
+                var newFrame = window.frame
+                newFrame.size.height = desiredWinH
+                newFrame.origin.y = desiredOriginY
+                window.setFrame(newFrame, display: true)
+            }
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        DispatchQueue.main.async { [weak view] in
+            guard let view, let window = view.window else { return }
+            context.coordinator.syncWindowFrame(from: view)
+            if context.coordinator.observers.isEmpty {
+                let nc = NotificationCenter.default
+                let resizeObs = nc.addObserver(forName: NSWindow.didResizeNotification, object: window, queue: .main) { [weak view] _ in
+                    guard let view else { return }
+                    context.coordinator.syncWindowFrame(from: view)
+                }
+                let moveObs = nc.addObserver(forName: NSWindow.didMoveNotification, object: window, queue: .main) { [weak view] _ in
+                    guard let view else { return }
+                    context.coordinator.syncWindowFrame(from: view)
+                }
+                context.coordinator.observers = [resizeObs, moveObs]
+            }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async { [weak nsView] in
+            guard let nsView else { return }
+            context.coordinator.syncWindowFrame(from: nsView)
         }
     }
 }
