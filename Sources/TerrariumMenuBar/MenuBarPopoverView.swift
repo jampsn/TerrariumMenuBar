@@ -92,35 +92,39 @@ struct MenuBarPopoverView: View {
             }
             .padding(12)
 
-            // 底部状态栏
-            HStack {
+            // 底部双层状态栏：上层完整信息提示条 + 下层系统点数与操作按钮
+            VStack(alignment: .leading, spacing: 5) {
                 Text(state.statusText)
                     .font(.system(size: 10.5, design: .monospaced))
                     .foregroundColor(textMuted)
-                    .lineLimit(1)
-                Spacer()
-                Text(state.isSleeping ? "休眠" : "~\(state.nextEventMinutesRemaining)m")
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 6) {
+                    Text(state.isSleeping ? "休眠中" : "下轮气候 ~\(state.nextEventMinutesRemaining)m")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(textMuted)
+                    Text("· 生态点: \(state.ecoPoints)")
+                        .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                        .foregroundColor(adminAmber)
+                    Spacer()
+                    Button("⚙️ 设置") {
+                        state.isConfirmingResetSave = false
+                        state.isShowingSettings.toggle()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(state.isShowingSettings ? adminAmber : textMuted)
+
+                    Button("退出") {
+                        state.flushSave()
+                        NSApp.terminate(nil)
+                    }
+                    .buttonStyle(.plain)
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(textMuted)
-                Text("· 点数:\(state.ecoPoints)")
-                    .font(.system(size: 10.5, weight: .bold, design: .monospaced))
-                    .foregroundColor(textMain)
-                Button("⚙️ 设置") {
-                    state.isConfirmingResetSave = false
-                    state.isShowingSettings.toggle()
+                    .padding(.leading, 4)
                 }
-                .buttonStyle(.plain)
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(state.isShowingSettings ? adminAmber : textMuted)
-                .padding(.leading, 6)
-                Button("退出") {
-                    state.flushSave()
-                    NSApp.terminate(nil)
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(textMuted)
-                .padding(.leading, 6)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

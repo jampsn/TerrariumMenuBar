@@ -242,10 +242,21 @@ final class StageAnimator: ObservableObject {
             bobOffset = 0.0
         }
 
+        var buoyancyLift = 0.0
+        if (c.kind == .neonTetra || c.kind == .bettaFish),
+           c.behavior != .sleep,
+           let state = boundState,
+           state.enabledDecorIDs.contains("aquatic_bubble_rock") {
+            let rock = TerrariumConfig.anchorGridPos(for: "aquatic_bubble_rock", decorOrigins: state.decorOrigins)
+            if hypot(c.gx - rock.gx, c.gy - rock.gy) < 1.65 {
+                buoyancyLift = 2.5
+            }
+        }
+
         let hopArc = ((c.kind == .treeFrog || c.kind == .dartFrog) && (c.behavior == .patrol || c.behavior == .seekingFood))
             ? sin(c.hopProgress * .pi) * 7.0
             : 0.0
-        c.gz = max(0.0, c.smoothBaseGZ + bobOffset + hopArc)
+        c.gz = max(0.0, c.smoothBaseGZ + bobOffset + buoyancyLift + hopArc)
     }
 
     func start() {
@@ -313,7 +324,48 @@ final class StageAnimator: ObservableObject {
 
         emitAquaticBubbles(state: state)
         emitSoulmateSparkles(state: state)
+        emitDecorInteractions(state: state)
         updateParticles()
+    }
+
+    private func emitDecorInteractions(state: TerrariumState) {
+        guard !state.isSleeping, (tick % 75) == 0 else { return }
+        for (idx, c) in critterRuntimes.enumerated() where c.isLeader && c.behavior == .idle {
+            guard ((tick / 75) + idx) % 2 == 0 else { continue }
+            guard let spot = TerrariumConfig.nicheSpot(for: c.kind, enabledDecorIDs: state.enabledDecorIDs, decorOrigins: state.decorOrigins) else {
+                continue
+            }
+            let dist = hypot(c.gx - (Double(spot.col) + 0.5), c.gy - (Double(spot.row) + 0.5))
+            guard dist <= 1.35 else { continue }
+            let pt = TerrariumConfig.isoToScreen(gx: c.gx, gy: c.gy, gz: c.gz)
+
+            switch c.kind {
+            case .cherryShrimp, .corydoras:
+                appendParticle(PixelParticle(
+                    x: pt.x, y: pt.y - 4.0, vx: 0, vy: 0,
+                    kind: .bubble, life: 180,
+                    gx: c.gx, gy: c.gy, gz: max(1.0, c.gz + 1.5),
+                    vz: 0.22, wobblePhase: Double.random(in: 0..<(2.0 * .pi))
+                ))
+            case .chameleon:
+                for _ in 0..<2 {
+                    appendParticle(PixelParticle(
+                        x: pt.x + Double.random(in: -5...5),
+                        y: pt.y - 10.0 + Double.random(in: -3...3),
+                        vx: Double.random(in: -0.2...0.2),
+                        vy: -0.35,
+                        kind: .sparkle,
+                        life: 16
+                    ))
+                }
+            case .sandGecko, .amberBeetle, .sandScorpion:
+                appendParticle(PixelParticle(x: pt.x, y: pt.y - 14.0, vx: 0, vy: -0.28, kind: .popup, life: 22, text: "☀️"))
+            case .treeFrog, .dartFrog, .fireNewt:
+                appendParticle(PixelParticle(x: pt.x, y: pt.y - 14.0, vx: 0, vy: -0.28, kind: .popup, life: 22, text: "♪"))
+            default:
+                break
+            }
+        }
     }
 
     private func emitSoulmateSparkles(state: TerrariumState) {
@@ -561,6 +613,23 @@ final class StageAnimator: ObservableObject {
                 c.hopProgress = 0.0
                 c.path.removeFirst()
                 state.updateCritterCoord(kind: c.kind, coord: nextNode)
+
+                // 浅水洼踏水/跳落溅起水花微粒
+                if (c.kind == .treeFrog || c.kind == .fireNewt || c.kind == .dartFrog),
+                   state.enabledDecorIDs.contains("shallow_pool"),
+                   TerrariumConfig.footprint(for: "shallow_pool", decorOrigins: state.decorOrigins).contains(nextNode) {
+                    let pt = TerrariumConfig.isoToScreen(gx: c.gx, gy: c.gy)
+                    for _ in 0..<3 {
+                        appendParticle(PixelParticle(
+                            x: pt.x + Double.random(in: -3...3),
+                            y: pt.y - 1.0,
+                            vx: Double.random(in: -0.6...0.6),
+                            vy: Double.random(in: -0.8...(-0.3)),
+                            kind: .splash,
+                            life: 10
+                        ))
+                    }
+                }
 
                 if c.behavior == .seekingFood && c.path.isEmpty {
                     if GridPathfinder.manhattan(nextNode, feedCoord) == 1 && state.foodBowlPortions > 0 {
