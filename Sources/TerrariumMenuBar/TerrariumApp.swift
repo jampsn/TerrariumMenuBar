@@ -71,6 +71,8 @@ struct TerrariumMenuBarApp: App {
             "plant_succulent_sheet", "plant_cactus_sheet", "plant_aloe_sheet",
             "plant_monstera_sheet", "plant_bromeliad_sheet", "plant_orchid_sheet",
             "plant_marimo_sheet", "plant_anubias_sheet", "plant_lotus_sheet",
+            "plant_sundew_sheet", "plant_lithops_sheet", "plant_agave_sheet",
+            "plant_pitcher_sheet", "plant_calathea_sheet", "plant_vallisneria_sheet", "plant_red_ludwigia_sheet",
             "vfx_dew_drop_sheet", "vfx_glass_mist", "vfx_glass_streak_sheet", "vfx_aquatic_algae",
             "char_frog_sheet", "char_snail_sheet", "char_pillbug_sheet", "char_rhino_beetle_sheet", "char_beetle_sheet",
             "char_gecko_sheet", "char_scarab_sheet", "char_firefly_sheet", "char_moth_sheet",
@@ -78,6 +80,9 @@ struct TerrariumMenuBarApp: App {
             "char_chameleon_green", "char_chameleon_coral", "char_chameleon_bark", "char_chameleon_rainbow",
             "char_shrimp_sheet", "char_tetra_sheet", "char_betta_sheet", "char_crayfish_sheet",
             "char_fire_newt_sheet", "char_sand_scorpion_sheet", "char_dart_frog_sheet", "char_corydoras_sheet",
+            "char_ladybug_sheet", "char_desert_mantis_sheet", "char_horned_toad_sheet", "char_blue_morpho_sheet",
+            "char_red_eyed_frog_sheet", "char_oto_catfish_sheet", "char_crystal_shrimp_sheet",
+            "char_dragonfly_sheet", "char_luna_cicada_sheet",
             "icon_mist", "icon_feed", "icon_clean", "icon_sleep"
         ]
         var failed: [String] = []
@@ -119,7 +124,23 @@ struct TerrariumMenuBarApp: App {
               PixelAssetLoader.spriteSheetFrame(named: "char_gecko_sheet", frameIndex: 4, frameSize: CGSize(width: 28, height: 18)) != nil,
               PixelAssetLoader.spriteSheetFrame(named: "char_pillbug_sheet", frameIndex: 8, frameSize: CGSize(width: 14, height: 10)) != nil,
               PixelAssetLoader.spriteSheetFrame(named: "char_moth_sheet", frameIndex: 2, frameSize: CGSize(width: 16, height: 14)) != nil,
-              PixelAssetLoader.spriteSheetFrame(named: "char_scarab_sheet", frameIndex: 3, frameSize: CGSize(width: 18, height: 14)) != nil else {
+              PixelAssetLoader.spriteSheetFrame(named: "char_scarab_sheet", frameIndex: 3, frameSize: CGSize(width: 18, height: 14)) != nil,
+              PixelAssetLoader.spriteSheetFrame(named: "plant_sundew_sheet", frameIndex: 3, frameSize: CGSize(width: 18, height: 16)) != nil,
+              PixelAssetLoader.spriteSheetFrame(named: "plant_lithops_sheet", frameIndex: 3, frameSize: CGSize(width: 18, height: 14)) != nil,
+              PixelAssetLoader.spriteSheetFrame(named: "plant_agave_sheet", frameIndex: 3, frameSize: CGSize(width: 22, height: 20)) != nil,
+              PixelAssetLoader.spriteSheetFrame(named: "plant_pitcher_sheet", frameIndex: 3, frameSize: CGSize(width: 20, height: 22)) != nil,
+              PixelAssetLoader.spriteSheetFrame(named: "plant_calathea_sheet", frameIndex: 3, frameSize: CGSize(width: 22, height: 20)) != nil,
+              PixelAssetLoader.spriteSheetFrame(named: "plant_vallisneria_sheet", frameIndex: 3, frameSize: CGSize(width: 18, height: 22)) != nil,
+              PixelAssetLoader.spriteSheetFrame(named: "plant_red_ludwigia_sheet", frameIndex: 3, frameSize: CGSize(width: 20, height: 20)) != nil,
+              PixelAssetLoader.spriteSheetFrame(named: "char_ladybug_sheet", frameIndex: 13, frameSize: CGSize(width: 14, height: 11)) != nil,
+              PixelAssetLoader.spriteSheetFrame(named: "char_desert_mantis_sheet", frameIndex: 13, frameSize: CGSize(width: 22, height: 16)) != nil,
+              PixelAssetLoader.spriteSheetFrame(named: "char_horned_toad_sheet", frameIndex: 13, frameSize: CGSize(width: 28, height: 18)) != nil,
+              PixelAssetLoader.spriteSheetFrame(named: "char_blue_morpho_sheet", frameIndex: 13, frameSize: CGSize(width: 22, height: 18)) != nil,
+              PixelAssetLoader.spriteSheetFrame(named: "char_red_eyed_frog_sheet", frameIndex: 18, frameSize: CGSize(width: 20, height: 18)) != nil,
+              PixelAssetLoader.spriteSheetFrame(named: "char_oto_catfish_sheet", frameIndex: 13, frameSize: CGSize(width: 16, height: 12)) != nil,
+              PixelAssetLoader.spriteSheetFrame(named: "char_crystal_shrimp_sheet", frameIndex: 13, frameSize: CGSize(width: 14, height: 11)) != nil,
+              PixelAssetLoader.spriteSheetFrame(named: "char_dragonfly_sheet", frameIndex: 7, frameSize: CGSize(width: 18, height: 14)) != nil,
+              PixelAssetLoader.spriteSheetFrame(named: "char_luna_cicada_sheet", frameIndex: 7, frameSize: CGSize(width: 16, height: 14)) != nil else {
             fputs("SELF_TEST_FAIL: New sprite sheet slicing failed.\n", stderr)
             Foundation.exit(1)
         }

@@ -162,7 +162,8 @@ final class StageAnimator: ObservableObject {
         switch kind {
         case .neonTetra: return 15.5 + altitudeBias
         case .bettaFish: return 22.5
-        case .corydoras: return 1.5
+        case .corydoras, .otoCatfish: return 1.5
+        case .blueMorpho: return 4.0
         default: return 0.0
         }
     }
@@ -192,19 +193,26 @@ final class StageAnimator: ObservableObject {
             case .idle, .patrol, .petted: return 22.5
             case .sleep: return 7.5
             }
-        case .cherryShrimp:
+        case .cherryShrimp, .crystalShrimp:
             switch c.behavior {
             case .eating, .seekingFood, .sleep: return 0.0
             case .startle: return 8.5
             case .patrol: return c.prefersMidwaterSwim ? 8.5 : 0.0
             case .idle, .petted: return c.prefersMidwaterSwim ? 6.5 : 0.0
             }
-        case .corydoras:
+        case .corydoras, .otoCatfish:
             switch c.behavior {
             case .eating, .seekingFood: return 2.5
             case .startle: return 7.0
             case .sleep: return 0.5
             case .idle, .patrol, .petted: return 1.5
+            }
+        case .blueMorpho:
+            switch c.behavior {
+            case .eating, .seekingFood, .sleep: return 0.0
+            case .startle: return 10.0
+            case .patrol: return 5.5
+            case .idle, .petted: return 3.0
             }
         default:
             return 0.0
@@ -232,12 +240,14 @@ final class StageAnimator: ObservableObject {
             bobOffset = sin(c.swimPhase) * 1.3
         } else if c.kind == .bettaFish {
             bobOffset = cos(c.swimPhase) * 1.6
-        } else if c.kind == .cherryShrimp && c.smoothBaseGZ > 0.8 {
+        } else if (c.kind == .cherryShrimp || c.kind == .crystalShrimp) && c.smoothBaseGZ > 0.8 {
             bobOffset = sin(c.swimPhase * 1.3) * 0.7
         } else if c.kind == .crayfish {
             bobOffset = 0.0
-        } else if c.kind == .corydoras {
+        } else if c.kind == .corydoras || c.kind == .otoCatfish {
             bobOffset = sin(c.swimPhase * 0.9) * 0.5
+        } else if c.kind == .blueMorpho {
+            bobOffset = sin(c.swimPhase * 1.6) * 1.2
         } else {
             bobOffset = 0.0
         }
@@ -253,7 +263,7 @@ final class StageAnimator: ObservableObject {
             }
         }
 
-        let hopArc = ((c.kind == .treeFrog || c.kind == .dartFrog) && (c.behavior == .patrol || c.behavior == .seekingFood))
+        let hopArc = ((c.kind == .treeFrog || c.kind == .dartFrog || c.kind == .redEyedFrog) && (c.behavior == .patrol || c.behavior == .seekingFood))
             ? sin(c.hopProgress * .pi) * 7.0
             : 0.0
         c.gz = max(0.0, c.smoothBaseGZ + bobOffset + buoyancyLift + hopArc)
@@ -350,14 +360,14 @@ final class StageAnimator: ObservableObject {
             let pt = TerrariumConfig.isoToScreen(gx: c.gx, gy: c.gy, gz: c.gz)
 
             switch c.kind {
-            case .cherryShrimp, .corydoras:
+            case .cherryShrimp, .corydoras, .otoCatfish, .crystalShrimp:
                 appendParticle(PixelParticle(
                     x: pt.x, y: pt.y - 4.0, vx: 0, vy: 0,
                     kind: .bubble, life: 180,
                     gx: c.gx, gy: c.gy, gz: max(1.0, c.gz + 1.5),
                     vz: 0.22, wobblePhase: Double.random(in: 0..<(2.0 * .pi))
                 ))
-            case .chameleon:
+            case .chameleon, .blueMorpho:
                 for _ in 0..<2 {
                     appendParticle(PixelParticle(
                         x: pt.x + Double.random(in: -5...5),
@@ -368,9 +378,9 @@ final class StageAnimator: ObservableObject {
                         life: 16
                     ))
                 }
-            case .sandGecko, .amberBeetle, .sandScorpion:
+            case .sandGecko, .amberBeetle, .sandScorpion, .hornedToad, .desertMantis:
                 appendParticle(PixelParticle(x: pt.x, y: pt.y - 14.0, vx: 0, vy: -0.28, kind: .popup, life: 22, text: "☀️"))
-            case .treeFrog, .dartFrog, .fireNewt:
+            case .treeFrog, .dartFrog, .fireNewt, .redEyedFrog:
                 appendParticle(PixelParticle(x: pt.x, y: pt.y - 14.0, vx: 0, vy: -0.28, kind: .popup, life: 22, text: "♪"))
             default:
                 break
@@ -598,17 +608,17 @@ final class StageAnimator: ObservableObject {
 
             let stepRate: Double
             switch c.kind {
-            case .treeFrog, .dartFrog: stepRate = 1.0 / 10.0
+            case .treeFrog, .dartFrog, .redEyedFrog: stepRate = 1.0 / 10.0
             case .snail: stepRate = 1.0 / 28.0
-            case .pillBug, .fireNewt: stepRate = 1.0 / 16.0
+            case .pillBug, .fireNewt, .desertMantis: stepRate = 1.0 / 16.0
             case .amberBeetle, .scarab: stepRate = 1.0 / 12.0
-            case .rhinoBeetle, .herculesBeetle, .crayfish: stepRate = 1.0 / 15.0
+            case .rhinoBeetle, .herculesBeetle, .crayfish, .crystalShrimp: stepRate = 1.0 / 15.0
             case .cherryShrimp: stepRate = c.prefersMidwaterSwim ? (1.0 / 12.0) : (1.0 / 16.0)
-            case .neonTetra: stepRate = 1.0 / 13.0
+            case .neonTetra, .hornedToad: stepRate = 1.0 / 13.0
             case .bettaFish: stepRate = 1.0 / 18.0
-            case .corydoras: stepRate = 1.0 / 14.0
+            case .corydoras, .otoCatfish, .ladybug: stepRate = 1.0 / 14.0
             case .leafInsect: stepRate = 1.0 / 22.0
-            case .sandGecko: stepRate = 1.0 / 11.0
+            case .sandGecko, .blueMorpho: stepRate = 1.0 / 11.0
             case .sandScorpion: stepRate = 1.0 / 14.0
             case .chameleon: stepRate = 1.0 / 18.0
             }
@@ -902,6 +912,13 @@ final class StageAnimator: ObservableObject {
                     case .sandScorpion: reactText = "翘尾!"
                     case .dartFrog: reactText = "亮斑!"
                     case .corydoras: reactText = "钻沙!"
+                    case .ladybug: reactText = "收翅!"
+                    case .desertMantis: reactText = "亮镰!"
+                    case .hornedToad: reactText = "鼓刺!"
+                    case .blueMorpho: reactText = "振翅!"
+                    case .redEyedFrog: reactText = "瞪眼!"
+                    case .otoCatfish: reactText = "贴壁!"
+                    case .crystalShrimp: reactText = "弹跳!"
                     default: reactText = "!"
                     }
                     appendParticle(PixelParticle(x: screenPos.x, y: screenPos.y - 16, vx: 0, vy: -0.45, kind: .popup, life: 22, text: reactText))

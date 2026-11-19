@@ -282,7 +282,7 @@ runTest("test_thermalControlHeating_v3Migration_andRainforestChameleon") {
         "unlockedCodexIDs": AnyCodableBox(["moss"])
     ])
     let migrated = try? JSONDecoder().decode(TerrariumSaveData.self, from: v3Data)
-    check(migrated?.schemaVersion == 4 && migrated?.containers.count == 1 && migrated?.ecoPoints == 19, "v3 存档应无损迁移至 v4 容器列表并保留生态点")
+    check(migrated?.schemaVersion == 5 && migrated?.containers.count == 1 && migrated?.ecoPoints == 19, "v3 存档应无损迁移至最新 v5 容器列表并保留生态点")
 }
 
 private struct AnyCodableBox: Encodable {
@@ -497,6 +497,48 @@ runTest("test_persistenceBackupRecovery_andCorruptedIsolation") {
     check(recovered?.ecoPoints == 42, "主档损坏时应自动从 .bak 恢复上一份有效存档(42点)，实际=\(recovered?.ecoPoints ?? -1)")
     let files = (try? FileManager.default.contentsOfDirectory(atPath: tmpDir.path)) ?? []
     check(files.contains(where: { $0.hasPrefix("save.corrupted.") }), "损坏的主档应被隔离保留而非静默删除")
+}
+
+runTest("test_v030_50Codex_frameSkins_andV4Migration") {
+    let entries = TerrariumConfig.defaultCodexEntries()
+    check(entries.count == 50, "v0.3.0 图鉴总数应扩充至 50 项，实际=\(entries.count)")
+    check(Set(entries.map { $0.id }).count == 50, "50 项图鉴 ID 不可重复")
+
+    check(TerrariumConfig.codexMilestoneTitle(unlockedCount: 5) == "🔍 探索萌新", "5 项图鉴称号应为探索萌新")
+    check(TerrariumConfig.codexMilestoneTitle(unlockedCount: 10) == "🌱 生态学徒", "10 项图鉴称号应为生态学徒")
+    check(TerrariumConfig.codexMilestoneTitle(unlockedCount: 20) == "🪴 箱庭园丁", "20 项图鉴称号应为箱庭园丁")
+    check(TerrariumConfig.codexMilestoneTitle(unlockedCount: 33) == "🌿 博物学家", "33 项图鉴称号应为博物学家")
+    check(TerrariumConfig.codexMilestoneTitle(unlockedCount: 42) == "🌟 微境守望者", "42 项图鉴称号应为微境守望者")
+    check(TerrariumConfig.codexMilestoneTitle(unlockedCount: 50) == "🏆 全生态宗师", "50 项图鉴称号应为全生态宗师")
+
+    check(TankFrameSkin.allCases.count == 5, "缸体边框皮肤应有 5 款")
+    check(TankFrameSkin.classic.cost == 0 && TankFrameSkin.obsidian.cost > 0, "经典款免费，黑曜石边框应消耗点数")
+
+    // 验证新植物与空中访客解锁
+    let codex: [String] = []
+    var aqInst = TerrariumInstanceState.empty(biome: .aquatic)
+    aqInst.atmosphere = .day
+    aqInst.humidity = 75
+    aqInst.plants = [PlantInstance(speciesID: "lotus", coord: GridCoord(col: 5, row: 5), stage: .mature)]
+    let unlocked = TerrariumSimulation.evaluateCodexUnlocks(instance: aqInst, alreadyUnlocked: Set(codex))
+    check(unlocked.contains("dragonfly"), "水域白昼高湿且有成熟睡莲时应解锁碧波蜻蜓")
+    check(unlocked.contains("lotus"), "水域存在睡莲时应解锁对应图鉴")
+
+    // 验证 v4 无皮肤字段存档向 v5 无损迁移
+    let v4Seed = TerrariumSaveData()
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    let v5Data = try! encoder.encode(v4Seed)
+    var jsonObj = try! JSONSerialization.jsonObject(with: v5Data) as! [String: Any]
+    jsonObj["schemaVersion"] = 4
+    jsonObj.removeValue(forKey: "unlockedFrameSkinIDs")
+    jsonObj.removeValue(forKey: "activeFrameSkinID")
+    let v4Raw = try! JSONSerialization.data(withJSONObject: jsonObj)
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    let migrated = try! decoder.decode(TerrariumSaveData.self, from: v4Raw)
+    check(migrated.unlockedFrameSkinIDs == [TankFrameSkin.classic.rawValue], "v4 旧存档迁移后应默认解锁 classic 边框")
+    check(migrated.activeFrameSkinID == TankFrameSkin.classic.rawValue, "v4 旧存档迁移后应默认启用 classic 边框")
 }
 
 print("\nSummary: \(passedCount) passed, \(failedCount) failed.")

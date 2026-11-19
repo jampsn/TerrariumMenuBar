@@ -18,6 +18,7 @@ let package = Package(
         .executableTarget(
             name: "TerrariumMenuBar",
             dependencies: ["TerrariumCore"],
+            exclude: ["Resources/AppIcon.icns"],
             resources: [
                 .copy("Resources/Pixel")
             ]

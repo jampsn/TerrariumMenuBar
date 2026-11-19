@@ -1016,7 +1016,64 @@ struct MenuBarPopoverView: View {
                     .background(bgHeader)
                     .overlay(Rectangle().stroke(borderCol, lineWidth: 1.5))
                 }
+
+                Divider().background(borderCol).padding(.vertical, 2)
+
+                HStack {
+                    Text("缸体边框皮肤（全缸通用）")
+                        .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+                        .foregroundColor(textMain)
+                    Spacer()
+                }
+
+                VStack(spacing: 6) {
+                    ForEach(TankFrameSkin.allCases, id: \.rawValue) { skin in
+                        let isUnlocked = state.unlockedFrameSkinIDs.contains(skin.rawValue)
+                        let isActive = state.activeFrameSkin == skin
+                        HStack(spacing: 10) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(frameSwatchColor(skin))
+                                .frame(width: 24, height: 24)
+                                .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(skin.displayName)
+                                    .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+                                    .foregroundColor(textMain)
+                                Text(isUnlocked ? (isActive ? "当前已启用" : "已解锁，点击即可切换") : "解锁消耗：\(skin.cost) 生态点")
+                                    .font(.system(size: 9.5, design: .monospaced))
+                                    .foregroundColor(textMuted)
+                            }
+                            Spacer()
+                            Button {
+                                state.purchaseOrSelectFrameSkin(skin)
+                            } label: {
+                                Text(isActive ? "使用中" : (isUnlocked ? "切换" : "\(skin.cost) 点解锁"))
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(isActive ? adminAmber : (isUnlocked ? bgCard : accentGreen))
+                                    .foregroundColor(isActive ? .black : textMain)
+                                    .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isActive || (!isUnlocked && state.ecoPoints < skin.cost))
+                        }
+                        .padding(6)
+                        .background(bgHeader)
+                        .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                    }
+                }
             }
+        }
+    }
+
+    private func frameSwatchColor(_ skin: TankFrameSkin) -> Color {
+        switch skin {
+        case .classic: return Color(red: 0.23, green: 0.32, blue: 0.27)
+        case .wood: return Color(red: 0.45, green: 0.29, blue: 0.16)
+        case .brass: return Color(red: 0.72, green: 0.56, blue: 0.24)
+        case .frosted: return Color(red: 0.65, green: 0.80, blue: 0.88)
+        case .obsidian: return Color(red: 0.18, green: 0.16, blue: 0.28)
         }
     }
 
@@ -1141,6 +1198,19 @@ struct MenuBarPopoverView: View {
     private var codexTabContent: some View {
         ScrollView {
             VStack(spacing: 6) {
+                HStack {
+                    Text("收集称号：\(state.codexMilestoneTitle)")
+                        .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+                        .foregroundColor(adminAmber)
+                    Spacer()
+                    Text("\(state.unlockedCodexCount) / \(state.codexEntries.count)")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(textMain)
+                }
+                .padding(8)
+                .background(bgHeader)
+                .overlay(Rectangle().stroke(borderCol, lineWidth: 1.5))
+
                 ForEach(state.codexEntries) { entry in
                     VStack(alignment: .leading, spacing: 3) {
                         HStack {

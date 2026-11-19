@@ -23,8 +23,8 @@
      - `StageAnimator.swift`：精灵动画状态机、VFX 粒子预算与轻抚/气泡/露水帧驱动
      - `LocalWeatherService.swift`：本地实时气温联动服务
      - `PixelAssetLoader.swift` & `Resources/Pixel/`：像素精灵表与静态图资产加载
-  3. `Sources/TerrariumCoreTestRunner/`：无头单元测试运行器（`main.swift`，当前 15 项核心测试）
-  4. `build_app.sh`：原生 `.app` 编译、资源拷贝与签名打包脚本（默认输出 `/tmp/terrarium-build/TerrariumMenuBar.app`）
+  3. `Sources/TerrariumCoreTestRunner/`：无头单元测试运行器（`main.swift`，当前 18 项核心测试）
+  4. `build_app.sh`：原生 `.app` 编译、资源拷贝（含 `AppIcon.icns`）与签名打包脚本（默认输出 `/tmp/terrarium-build/TerrariumMenuBar.app`）
 
 ---
 
@@ -46,9 +46,9 @@
 
 ## 3. 存档兼容与升级规范
 
-- **当前存档版本**：`schemaVersion = 4`（支持多生态缸实例自由购置、跨缸共享生态点与图鉴、五阶好感数据）。
+- **当前存档版本**：`schemaVersion = 5`（支持多生态缸实例自由购置、跨缸共享生态点、50 项图鉴与收集称号、五阶好感数据、全缸通用缸体边框皮肤）。
 - **向后兼容硬约束**：
-  - `TerrariumModels.swift` 必须保持对 `v1 ~ v3` 旧版存档的无损解码与自动迁移至 `v4`；
+  - `TerrariumModels.swift` 必须保持对 `v1 ~ v4` 旧版存档的无损解码与自动迁移至 `v5`；
   - 新增 `Codable` 字段必须使用 `decodeIfPresent` 并提供安全默认值，严禁因缺失字段导致老玩家存档崩溃或重置。
 
 ---

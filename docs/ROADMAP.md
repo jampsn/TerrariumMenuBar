@@ -30,6 +30,7 @@
 - [x] **[001 - 视觉透视、温控交互与 UI 布局精细化优化](features/001-visual-ux-thermal-polish.md)**：重绘 45° 氛围背景、精修前玻璃、移除升降温连点瞬时跳变、睡莲成熟期去根茎、UI 防遮挡排版、鱼缸藻垢立体水体变绿与缸壁藻体。
 - [x] **[002 - 经济重平衡、管理员时间加速、UI 对齐与造景摆件扩充](features/002-economy-rebalance-admin-speed-decor-expansion.md)**：传感器三栏等高、产点间隔重平衡与离线分段衰减、管理员倍速/快进、修剪二次确认、温控购买解耦（方案 A）、12 件摆件放大重绘及新增 8 件摆件。
 - [x] **[003 - 工程性能与存档安全加固](features/003-engineering-and-persistence-hardening.md)**：存档 `.bak` 备份与损坏隔离恢复、Popover 隐藏停帧、自检尺寸对齐、生态区感知文案、气象退避重试与开机自启。
+- [x] **[004 - v0.3.0 像素图标、50项立体图鉴扩展与缸体皮肤](features/004-v030-icon-50codex-skins.md)**：生成像素生态瓶 `AppIcon.icns`；图鉴从 33 项扩充至 50 项（新增 8 种植物、7 种可领养 3D 立体动物与 2 种空中访客）；新增 6 阶收集称号与 5 款缸体边框皮肤（`schemaVersion = 5` 无损升级）。
 
 ---
 

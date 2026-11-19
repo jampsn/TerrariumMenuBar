@@ -61,9 +61,16 @@ public enum TerrariumSimulation {
         }()
 
         var floraReduction = 0.0
+        let lightFlora: Set<String> = ["moss", "red_shroom", "lithops"]
+        let lushFlora: Set<String> = [
+            "fern", "clover", "sundew",
+            "monstera", "bromeliad", "orchid", "pitcher_plant", "calathea",
+            "marimo", "anubias", "lotus", "vallisneria", "red_ludwigia",
+            "agave"
+        ]
         for p in instance.plants where p.stage != .withered {
-            if p.speciesID == "moss" { floraReduction += 0.03 }
-            else if p.speciesID == "fern" || p.speciesID == "clover" || p.speciesID == "monstera" || p.speciesID == "bromeliad" || p.speciesID == "orchid" || p.speciesID == "marimo" || p.speciesID == "anubias" || p.speciesID == "lotus" {
+            if lightFlora.contains(p.speciesID) { floraReduction += 0.03 }
+            else if lushFlora.contains(p.speciesID) {
                 floraReduction += 0.05
             }
         }
@@ -88,7 +95,9 @@ public enum TerrariumSimulation {
 
     public static func computeDewLevel(speciesID: String, humidity: Int, mistDewBoostSeconds: TimeInterval) -> Int {
         guard speciesID != "succulent", speciesID != "cactus", speciesID != "aloe",
-              speciesID != "marimo", speciesID != "anubias", speciesID != "lotus" else { return 0 }
+              speciesID != "lithops", speciesID != "agave",
+              speciesID != "marimo", speciesID != "anubias", speciesID != "lotus",
+              speciesID != "vallisneria", speciesID != "red_ludwigia" else { return 0 }
         if humidity >= TerrariumConfig.dewHeavyHumidityThreshold || mistDewBoostSeconds > 0 {
             return 2
         }
@@ -390,6 +399,12 @@ public enum TerrariumSimulation {
             if instance.temperature > 21 { return (false, "需温度≤21°C") }
             if instance.humidity < 68 { return (false, "需湿度≥68%") }
             return (true, "条件已达标")
+        case .ladybug:
+            guard instance.biome == .meadow else { return (false, "仅限温润苔原缸") }
+            let cloverCount = instance.plants.filter { $0.speciesID == "clover" && $0.stage != .withered }.count
+            if cloverCount < 1 { return (false, "需三叶草≥1") }
+            if instance.humidity < 50 { return (false, "需湿度≥50%") }
+            return (true, "条件已达标")
         case .amberBeetle:
             guard instance.biome == .sand else { return (false, "仅限暖阳沙地缸") }
             if !instance.enabledDecorIDs.contains("sand_pebbles") { return (false, "需摆放暖阳卵石滩") }
@@ -416,6 +431,20 @@ public enum TerrariumSimulation {
             if cactusCount < 1 { return (false, "需金琥仙人球≥1") }
             if instance.temperature < 26 { return (false, "需温度≥26°C") }
             return (true, "条件已达标")
+        case .desertMantis:
+            guard instance.biome == .sand else { return (false, "仅限暖阳沙地缸") }
+            let agaveCount = instance.plants.filter { $0.speciesID == "agave" && $0.stage != .withered }.count
+            if !instance.enabledDecorIDs.contains("sand_wood") { return (false, "需摆放白化沙木枝") }
+            if agaveCount < 1 { return (false, "需蓝叶龙舌兰≥1") }
+            if instance.temperature < 24 { return (false, "需温度≥24°C") }
+            return (true, "条件已达标")
+        case .hornedToad:
+            guard instance.biome == .sand else { return (false, "仅限暖阳沙地缸") }
+            if !instance.enabledDecorIDs.contains("sand_cairn") { return (false, "需摆放沙漠叠石堆") }
+            if !instance.enabledDecorIDs.contains("sand_rock") { return (false, "需摆放风蚀红砂岩") }
+            if cactusCount < 1 { return (false, "需金琥仙人球≥1") }
+            if instance.temperature < 27 { return (false, "需温度≥27°C") }
+            return (true, "条件已达标")
         case .leafInsect:
             guard instance.biome == .rainforest else { return (false, "仅限热带雨林缸") }
             if !instance.enabledDecorIDs.contains("rainforest_bark") { return (false, "需摆放朽木树洞") }
@@ -440,6 +469,20 @@ public enum TerrariumSimulation {
             if !instance.enabledDecorIDs.contains("rainforest_bromeliad_stump") { return (false, "需摆放积水凤梨朽桩") }
             if succinctPlants.bromeliadCount < 1 { return (false, "需积水凤梨≥1") }
             if instance.humidity < 72 { return (false, "需湿度≥72%") }
+            return (true, "条件已达标")
+        case .blueMorpho:
+            guard instance.biome == .rainforest else { return (false, "仅限热带雨林缸") }
+            let pitcherCount = instance.plants.filter { $0.speciesID == "pitcher_plant" && $0.stage != .withered }.count
+            if succinctPlants.orchidCount < 1 { return (false, "需热带兰花≥1") }
+            if pitcherCount < 1 { return (false, "需猪笼草≥1") }
+            if instance.humidity < 70 { return (false, "需湿度≥70%") }
+            return (true, "条件已达标")
+        case .redEyedFrog:
+            guard instance.biome == .rainforest else { return (false, "仅限热带雨林缸") }
+            let calatheaCount = instance.plants.filter { $0.speciesID == "calathea" && $0.stage != .withered }.count
+            if !instance.enabledDecorIDs.contains("rainforest_waterfall") { return (false, "需摆放雾化小瀑布石") }
+            if calatheaCount < 1 { return (false, "需孔雀竹芋≥1") }
+            if instance.humidity < 75 { return (false, "需湿度≥75%") }
             return (true, "条件已达标")
         case .cherryShrimp:
             guard instance.biome == .aquatic else { return (false, "仅限碧波鱼缸") }
@@ -472,6 +515,20 @@ public enum TerrariumSimulation {
             if !instance.enabledDecorIDs.contains("aquatic_bamboo_tube") { return (false, "需摆放莫斯竹筒屋") }
             if !instance.enabledDecorIDs.contains("aquatic_driftwood") { return (false, "需摆放沉木水草石") }
             if instance.humidity < 60 { return (false, "需溶氧≥60%") }
+            return (true, "条件已达标")
+        case .otoCatfish:
+            guard instance.biome == .aquatic else { return (false, "仅限碧波鱼缸") }
+            let valCount = instance.plants.filter { $0.speciesID == "vallisneria" && $0.stage != .withered }.count
+            if !instance.enabledDecorIDs.contains("aquatic_seiryu_stone") { return (false, "需摆放青龙造景石组") }
+            if valCount < 1 { return (false, "需螺旋苦草≥1") }
+            if instance.humidity < 65 { return (false, "需溶氧≥65%") }
+            return (true, "条件已达标")
+        case .crystalShrimp:
+            guard instance.biome == .aquatic else { return (false, "仅限碧波鱼缸") }
+            let ludCount = instance.plants.filter { $0.speciesID == "red_ludwigia" && $0.stage != .withered }.count
+            if !instance.enabledDecorIDs.contains("aquatic_bamboo_tube") { return (false, "需摆放莫斯竹筒屋") }
+            if ludCount < 1 { return (false, "需红蝴蝶水草≥1") }
+            if instance.humidity < 72 { return (false, "需溶氧≥72%") }
             return (true, "条件已达标")
         }
     }
@@ -718,6 +775,7 @@ public enum TerrariumSimulation {
         case .meadow:
             hasWoodBoost = instance.enabledDecorIDs.contains("driftwood")
             let mossCount = instance.plants.filter { $0.speciesID == "moss" && $0.stage != .withered }.count
+            let fernCount = instance.plants.filter { $0.speciesID == "fern" && $0.stage != .withered }.count
             let effectiveTemp = instance.enabledDecorIDs.contains("boulder") ? (instance.temperature - 1) : instance.temperature
 
             if mossCount == 0 {
@@ -727,6 +785,12 @@ public enum TerrariumSimulation {
             } else if effectiveTemp <= 19 && instance.humidity >= 75 {
                 candidateSpecies = "glow_shroom"
                 baseProb = 0.20
+            } else if fernCount >= 1 && instance.enabledDecorIDs.contains("shallow_pool") && instance.humidity >= 72 && (instance.plants.filter { $0.speciesID == "sundew" }.count < 2) {
+                candidateSpecies = "sundew"
+                baseProb = 0.22
+            } else if mossCount >= 1 && instance.humidity >= 60 && (instance.plants.filter { $0.speciesID == "red_shroom" }.count < 2) {
+                candidateSpecies = "red_shroom"
+                baseProb = 0.22
             } else if mossCount >= 2 && instance.humidity >= 62 && (instance.plants.filter { $0.speciesID == "fern" }.count < 3) {
                 candidateSpecies = "fern"
                 baseProb = 0.24
@@ -742,10 +806,17 @@ public enum TerrariumSimulation {
         case .sand:
             hasWoodBoost = instance.enabledDecorIDs.contains("sand_wood")
             let succCount = instance.plants.filter { $0.speciesID == "succulent" && $0.stage != .withered }.count
+            let aloeCount = instance.plants.filter { $0.speciesID == "aloe" && $0.stage != .withered }.count
             if succCount == 0 {
                 guard instance.humidity <= 55 else { return nil }
                 candidateSpecies = "succulent"
                 baseProb = 1.0 // 沙地缸冷启动首株必萌发
+            } else if aloeCount >= 1 && instance.temperature >= 25 && (instance.plants.filter { $0.speciesID == "agave" }.count < 2) {
+                candidateSpecies = "agave"
+                baseProb = 0.20
+            } else if succCount >= 1 && instance.humidity <= 45 && (instance.plants.filter { $0.speciesID == "lithops" }.count < 2) {
+                candidateSpecies = "lithops"
+                baseProb = 0.22
             } else if instance.temperature >= 25 && instance.humidity <= 50 && (instance.plants.filter { $0.speciesID == "cactus" }.count < 2) {
                 candidateSpecies = "cactus"
                 baseProb = 0.22
@@ -761,10 +832,17 @@ public enum TerrariumSimulation {
         case .rainforest:
             hasWoodBoost = instance.enabledDecorIDs.contains("rainforest_vine")
             let monsteraCount = instance.plants.filter { $0.speciesID == "monstera" && $0.stage != .withered }.count
+            let bromeliadCount = instance.plants.filter { $0.speciesID == "bromeliad" && $0.stage != .withered }.count
             if monsteraCount == 0 {
                 guard instance.humidity >= 60 else { return nil }
                 candidateSpecies = "monstera"
                 baseProb = 1.0 // 雨林缸冷启动首株必萌发龟背竹
+            } else if monsteraCount >= 1 && instance.humidity >= 74 && (instance.plants.filter { $0.speciesID == "pitcher_plant" }.count < 2) {
+                candidateSpecies = "pitcher_plant"
+                baseProb = 0.22
+            } else if bromeliadCount >= 1 && instance.humidity >= 68 && (instance.plants.filter { $0.speciesID == "calathea" }.count < 2) {
+                candidateSpecies = "calathea"
+                baseProb = 0.24
             } else if instance.temperature >= 24 && instance.humidity >= 75 && (instance.plants.filter { $0.speciesID == "orchid" }.count < 2) {
                 candidateSpecies = "orchid"
                 baseProb = 0.24
@@ -780,10 +858,17 @@ public enum TerrariumSimulation {
         case .aquatic:
             hasWoodBoost = instance.enabledDecorIDs.contains("aquatic_driftwood")
             let marimoCount = instance.plants.filter { $0.speciesID == "marimo" && $0.stage != .withered }.count
+            let anubiasCount = instance.plants.filter { $0.speciesID == "anubias" && $0.stage != .withered }.count
             if marimoCount == 0 {
                 guard instance.humidity >= 55 else { return nil }
                 candidateSpecies = "marimo"
                 baseProb = 1.0 // 鱼缸冷启动首株必生莫斯藻球
+            } else if anubiasCount >= 1 && instance.temperature >= 23 && instance.humidity >= 70 && (instance.plants.filter { $0.speciesID == "red_ludwigia" }.count < 2) {
+                candidateSpecies = "red_ludwigia"
+                baseProb = 0.22
+            } else if marimoCount >= 1 && instance.humidity >= 60 && (instance.plants.filter { $0.speciesID == "vallisneria" }.count < 2) {
+                candidateSpecies = "vallisneria"
+                baseProb = 0.24
             } else if instance.temperature >= 23 && instance.humidity >= 72 && (instance.plants.filter { $0.speciesID == "lotus" }.count < 2) {
                 candidateSpecies = "lotus"
                 baseProb = 0.24
@@ -868,6 +953,26 @@ public enum TerrariumSimulation {
             plants: instance.plants
         ) {
             result.append("moon_moth")
+        }
+
+        if !alreadyUnlocked.contains("dragonfly") && TerrariumConfig.isDragonflyCondition(
+            biome: instance.biome,
+            atmosphere: instance.atmosphere,
+            humidity: instance.humidity,
+            plants: instance.plants,
+            enabledDecorIDs: instance.enabledDecorIDs
+        ) {
+            result.append("dragonfly")
+        }
+
+        if !alreadyUnlocked.contains("luna_cicada") && TerrariumConfig.isLunaCicadaCondition(
+            biome: instance.biome,
+            atmosphere: instance.atmosphere,
+            temperature: instance.temperature,
+            plants: instance.plants,
+            enabledDecorIDs: instance.enabledDecorIDs
+        ) {
+            result.append("luna_cicada")
         }
 
         return result

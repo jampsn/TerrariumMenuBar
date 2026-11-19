@@ -66,6 +66,9 @@ final class TerrariumState: ObservableObject {
     @Published var showIsoGridDebug: Bool = false
     @Published var localOutdoorTempC: Int? = nil
     @Published var localCityName: String? = nil
+    @Published var codexMilestoneTitle: String = "🔍 探索萌新"
+    @Published var unlockedFrameSkinIDs: [String] = [TankFrameSkin.classic.rawValue]
+    @Published var activeFrameSkin: TankFrameSkin = .classic
 
     let vfxSubject = PassthroughSubject<VFXEvent, Never>()
 
@@ -1328,6 +1331,9 @@ final class TerrariumState: ObservableObject {
             copy.unlocked = unlockedCodexSet.contains(entry.id)
             return copy
         }
+        codexMilestoneTitle = TerrariumConfig.codexMilestoneTitle(unlockedCount: unlockedCodexSet.count)
+        unlockedFrameSkinIDs = saveData.unlockedFrameSkinIDs
+        activeFrameSkin = TankFrameSkin(rawValue: saveData.activeFrameSkinID) ?? .classic
 
         let unlockedDecorSet = Set(inst.unlockedDecorIDs)
         let enabledDecorSet = Set(inst.enabledDecorIDs)
@@ -1340,5 +1346,25 @@ final class TerrariumState: ObservableObject {
 
         let remaining = max(0, inst.nextWeatherEventAt.timeIntervalSince(now))
         nextEventMinutesRemaining = max(1, Int(ceil(remaining / 60.0)))
+    }
+
+    @discardableResult
+    func purchaseOrSelectFrameSkin(_ skin: TankFrameSkin) -> Bool {
+        if saveData.unlockedFrameSkinIDs.contains(skin.rawValue) {
+            saveData.activeFrameSkinID = skin.rawValue
+            commitStateChange()
+            bannerNotice = "已更换缸体边框「\(skin.displayName)」"
+            return true
+        }
+        guard saveData.ecoPoints >= skin.cost else {
+            bannerNotice = "点数不足（需要 \(skin.cost) 点）"
+            return false
+        }
+        saveData.ecoPoints -= skin.cost
+        saveData.unlockedFrameSkinIDs.append(skin.rawValue)
+        saveData.activeFrameSkinID = skin.rawValue
+        commitStateChange()
+        bannerNotice = "已解锁并启用「\(skin.displayName)」边框"
+        return true
     }
 }

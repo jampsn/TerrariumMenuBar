@@ -495,6 +495,27 @@ struct PixelStageView: View {
                     case "anubias":
                         let fIdx = isSprout ? 2 : (isWilting ? 3 : (state.isSleeping ? 0 : ((animator.tick / 10 + idx + phaseShift) % 2)))
                         drawSheetFrame(in: &ctx, sheet: "plant_anubias_sheet", frameIndex: fIdx, frameSize: CGSize(width: 22, height: 20), screenPos: screenPos, anchor: CGPoint(x: 11, y: 16), flippedX: flipPlant)
+                    case "sundew":
+                        let fIdx = isSprout ? 2 : (isWilting ? 3 : ((plant.dewLevel > 0 || phaseShift == 1) ? 1 : 0))
+                        drawSheetFrame(in: &ctx, sheet: "plant_sundew_sheet", frameIndex: fIdx, frameSize: CGSize(width: 18, height: 16), screenPos: screenPos, anchor: CGPoint(x: 9, y: 13), flippedX: flipPlant)
+                    case "lithops":
+                        let fIdx = isSprout ? 2 : (isWilting ? 3 : ((state.humidity <= 45 || phaseShift == 1) ? 1 : 0))
+                        drawSheetFrame(in: &ctx, sheet: "plant_lithops_sheet", frameIndex: fIdx, frameSize: CGSize(width: 18, height: 14), screenPos: screenPos, anchor: CGPoint(x: 9, y: 11), flippedX: flipPlant)
+                    case "agave":
+                        let fIdx = isSprout ? 2 : (isWilting ? 3 : ((plant.stage == .mature || plant.stage == .lushDew || phaseShift == 1) ? 1 : 0))
+                        drawSheetFrame(in: &ctx, sheet: "plant_agave_sheet", frameIndex: fIdx, frameSize: CGSize(width: 22, height: 20), screenPos: screenPos, anchor: CGPoint(x: 11, y: 16), flippedX: flipPlant)
+                    case "pitcher_plant":
+                        let fIdx = isSprout ? 2 : (isWilting ? 3 : ((plant.dewLevel > 0 || phaseShift == 1) ? 1 : 0))
+                        drawSheetFrame(in: &ctx, sheet: "plant_pitcher_sheet", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 22), screenPos: screenPos, anchor: CGPoint(x: 10, y: 17), flippedX: flipPlant)
+                    case "calathea":
+                        let fIdx = isSprout ? 2 : (isWilting ? 3 : (state.isSleeping ? 0 : ((animator.tick / 10 + idx + phaseShift) % 2)))
+                        drawSheetFrame(in: &ctx, sheet: "plant_calathea_sheet", frameIndex: fIdx, frameSize: CGSize(width: 22, height: 20), screenPos: screenPos, anchor: CGPoint(x: 11, y: 16), flippedX: flipPlant)
+                    case "vallisneria":
+                        let fIdx = isSprout ? 2 : (isWilting ? 3 : (state.isSleeping ? 0 : ((animator.tick / 10 + idx + phaseShift) % 2)))
+                        drawSheetFrame(in: &ctx, sheet: "plant_vallisneria_sheet", frameIndex: fIdx, frameSize: CGSize(width: 18, height: 22), screenPos: screenPos, anchor: CGPoint(x: 9, y: 18), flippedX: flipPlant)
+                    case "red_ludwigia":
+                        let fIdx = isSprout ? 2 : (isWilting ? 3 : (state.isSleeping ? 0 : ((animator.tick / 10 + idx + phaseShift) % 2)))
+                        drawSheetFrame(in: &ctx, sheet: "plant_red_ludwigia_sheet", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 20), screenPos: screenPos, anchor: CGPoint(x: 10, y: 16), flippedX: flipPlant)
                     case "lotus":
                         // 仅在幼苗期绘制半透明水下细芽茎；成熟期与枯萎期不再保留水下茎与根部，保持水体通透美观
                         if isSprout {
@@ -610,6 +631,20 @@ struct PixelStageView: View {
                         drawSheetFrame(in: &ctx, sheet: "char_dart_frog_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 20, height: 18), screenPos: screenPos, anchor: CGPoint(x: 10, y: 15), flippedX: !c.facingRight)
                     case .corydoras:
                         drawSheetFrame(in: &ctx, sheet: "char_corydoras_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 16, height: 12), screenPos: screenPos, anchor: CGPoint(x: 8, y: 9), flippedX: !c.facingRight)
+                    case .ladybug:
+                        drawSheetFrame(in: &ctx, sheet: "char_ladybug_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 14, height: 11), screenPos: screenPos, anchor: CGPoint(x: 7, y: 8), flippedX: !c.facingRight)
+                    case .desertMantis:
+                        drawSheetFrame(in: &ctx, sheet: "char_desert_mantis_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 22, height: 16), screenPos: screenPos, anchor: CGPoint(x: 11, y: 12), flippedX: !c.facingRight)
+                    case .hornedToad:
+                        drawSheetFrame(in: &ctx, sheet: "char_horned_toad_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 28, height: 18), screenPos: screenPos, anchor: CGPoint(x: 14, y: 14), flippedX: !c.facingRight)
+                    case .blueMorpho:
+                        drawSheetFrame(in: &ctx, sheet: "char_blue_morpho_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 22, height: 18), screenPos: screenPos, anchor: CGPoint(x: 11, y: 13), flippedX: !c.facingRight)
+                    case .redEyedFrog:
+                        drawSheetFrame(in: &ctx, sheet: "char_red_eyed_frog_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 20, height: 18), screenPos: screenPos, anchor: CGPoint(x: 10, y: 15), flippedX: !c.facingRight)
+                    case .otoCatfish:
+                        drawSheetFrame(in: &ctx, sheet: "char_oto_catfish_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 16, height: 12), screenPos: screenPos, anchor: CGPoint(x: 8, y: 9), flippedX: !c.facingRight)
+                    case .crystalShrimp:
+                        drawSheetFrame(in: &ctx, sheet: "char_crystal_shrimp_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 14, height: 11), screenPos: screenPos, anchor: CGPoint(x: 7, y: 9), flippedX: !c.facingRight)
                     }
                 })
             }
@@ -635,6 +670,24 @@ struct PixelStageView: View {
                 let mothPos = TerrariumConfig.isoToScreen(gx: mothGX, gy: mothGY, gz: mothGZ)
                 let mothFrame = state.isSleeping ? 6 : ((animator.tick / 3) % 4)
                 drawSheetFrame(in: &context, sheet: "char_moth_sheet", frameIndex: mothFrame, frameSize: CGSize(width: 16, height: 14), screenPos: mothPos, anchor: CGPoint(x: 8, y: 7))
+            }
+
+            if TerrariumConfig.isDragonflyCondition(biome: state.currentBiome, atmosphere: state.atmosphere, humidity: state.humidity, plants: state.plants, enabledDecorIDs: state.enabledDecorIDs) {
+                let dfGX = 5.0 + sin(Double(animator.tick) * 0.11) * 3.0
+                let dfGY = 4.8 + cos(Double(animator.tick) * 0.09) * 2.5
+                let dfGZ = 30.0 + sin(Double(animator.tick) * 0.18) * 3.0
+                let dfPos = TerrariumConfig.isoToScreen(gx: dfGX, gy: dfGY, gz: dfGZ)
+                let dfFrame = state.isSleeping ? 6 : ((animator.tick / 2) % 4)
+                drawSheetFrame(in: &context, sheet: "char_dragonfly_sheet", frameIndex: dfFrame, frameSize: CGSize(width: 18, height: 14), screenPos: dfPos, anchor: CGPoint(x: 9, y: 7))
+            }
+
+            if TerrariumConfig.isLunaCicadaCondition(biome: state.currentBiome, atmosphere: state.atmosphere, temperature: state.temperature, plants: state.plants, enabledDecorIDs: state.enabledDecorIDs) {
+                let lcGX = 4.8 + cos(Double(animator.tick) * 0.06) * 2.4
+                let lcGY = 5.2 + sin(Double(animator.tick) * 0.08) * 2.0
+                let lcGZ = 27.0 + cos(Double(animator.tick) * 0.12) * 3.2
+                let lcPos = TerrariumConfig.isoToScreen(gx: lcGX, gy: lcGY, gz: lcGZ)
+                let lcFrame = state.isSleeping ? 6 : ((animator.tick / 3) % 4)
+                drawSheetFrame(in: &context, sheet: "char_luna_cicada_sheet", frameIndex: lcFrame, frameSize: CGSize(width: 16, height: 14), screenPos: lcPos, anchor: CGPoint(x: 8, y: 7))
             }
 
             // 食盆存在食物时的微弱香气提示粒子（陆生缸使用；鱼缸改为水面喂食圈，不冒水底香气）
@@ -872,7 +925,12 @@ struct PixelStageView: View {
             }
         }
         .frame(width: 448, height: 352)
-        .border(Color(red: 0.23, green: 0.32, blue: 0.27), width: 2)
+        .overlay(
+            Rectangle()
+                .strokeBorder(frameAccentColor, lineWidth: 1)
+                .padding(2)
+        )
+        .border(frameBorderColor, width: 2)
         .contentShape(Rectangle())
         .gesture(
             SpatialTapGesture()
@@ -896,9 +954,29 @@ struct PixelStageView: View {
         }
     }
 
+    private var frameBorderColor: Color {
+        switch state.activeFrameSkin {
+        case .classic: return Color(red: 0.23, green: 0.32, blue: 0.27)
+        case .wood: return Color(red: 0.45, green: 0.29, blue: 0.16)
+        case .brass: return Color(red: 0.72, green: 0.56, blue: 0.24)
+        case .frosted: return Color(red: 0.65, green: 0.80, blue: 0.88)
+        case .obsidian: return Color(red: 0.12, green: 0.13, blue: 0.17)
+        }
+    }
+
+    private var frameAccentColor: Color {
+        switch state.activeFrameSkin {
+        case .classic: return Color.clear
+        case .wood: return Color(red: 0.65, green: 0.44, blue: 0.25).opacity(0.6)
+        case .brass: return Color(red: 0.94, green: 0.80, blue: 0.42).opacity(0.75)
+        case .frosted: return Color.white.opacity(0.45)
+        case .obsidian: return Color(red: 0.42, green: 0.35, blue: 0.68).opacity(0.75)
+        }
+    }
+
     private func critterFrameIndex(for c: CritterRuntime, globalTick: Int) -> Int {
         switch c.kind {
-        case .treeFrog, .dartFrog:
+        case .treeFrog, .dartFrog, .redEyedFrog:
             switch c.behavior {
             case .idle, .petted:
                 let seq = [0, 0, 1, 1, 2, 3]
@@ -972,7 +1050,8 @@ struct PixelStageView: View {
             case .sleep: return 10 + ((globalTick / 10) % 2)
             }
 
-        case .bettaFish, .crayfish, .fireNewt, .sandScorpion, .corydoras:
+        case .bettaFish, .crayfish, .fireNewt, .sandScorpion, .corydoras,
+             .ladybug, .desertMantis, .hornedToad, .blueMorpho, .otoCatfish, .crystalShrimp:
             switch c.behavior {
             case .idle, .petted: return (globalTick / 6) % 3
             case .patrol, .seekingFood: return 3 + ((globalTick / 3) % 4)
