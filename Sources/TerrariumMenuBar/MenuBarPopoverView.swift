@@ -15,7 +15,8 @@ struct MenuBarPopoverView: View {
     private let adminAmber = Color(red: 0.98, green: 0.75, blue: 0.14)
 
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack {
+            VStack(spacing: 0) {
             // 顶部标题与 Tab 栏（连击标题 5 次解锁会话级管理员模式）
             HStack {
                 HStack(spacing: 6) {
@@ -97,6 +98,14 @@ struct MenuBarPopoverView: View {
                 Text("· 点数:\(state.ecoPoints)")
                     .font(.system(size: 10.5, weight: .bold, design: .monospaced))
                     .foregroundColor(textMain)
+                Button("⚙️ 设置") {
+                    state.isConfirmingResetSave = false
+                    state.isShowingSettings.toggle()
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(state.isShowingSettings ? adminAmber : textMuted)
+                .padding(.leading, 6)
                 Button("退出") {
                     state.flushSave()
                     NSApp.terminate(nil)
@@ -110,6 +119,11 @@ struct MenuBarPopoverView: View {
             .padding(.vertical, 8)
             .background(bgHeader)
             .overlay(Rectangle().frame(height: 1.5).foregroundColor(borderCol), alignment: .top)
+        }
+
+            if state.isShowingSettings {
+                settingsOverlay
+            }
         }
         .frame(width: 472)
         .background(bgMain)
@@ -154,7 +168,7 @@ struct MenuBarPopoverView: View {
             }
 
             LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 98, maximum: 150), spacing: 5)],
+                columns: [GridItem(.adaptive(minimum: 118, maximum: 165), spacing: 5)],
                 spacing: 5
             ) {
                 ForEach(state.containers) { container in
@@ -165,13 +179,17 @@ struct MenuBarPopoverView: View {
                         HStack(spacing: 4) {
                             Text(container.instance.biome.iconEmoji)
                                 .font(.system(size: 11))
+                                .fixedSize(horizontal: true, vertical: false)
                             Text(container.customName)
                                 .font(.system(size: 10.5, weight: isSelected ? .bold : .medium, design: .monospaced))
                                 .lineLimit(1)
-                            Spacer(minLength: 2)
+                                .truncationMode(.tail)
+                            Spacer(minLength: 3)
                             Text("\(container.instance.temperature)°")
                                 .font(.system(size: 9.5, design: .monospaced))
                                 .opacity(0.85)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .layoutPriority(1)
                         }
                         .padding(.horizontal, 7)
                         .padding(.vertical, 5)
@@ -378,43 +396,65 @@ struct MenuBarPopoverView: View {
             }
 
             // 温湿度传感器条（含所有模式需购买后可用的夹缸物理加热灯/棒与降温扇开关）
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                let targetTemp = TerrariumConfig.baseAmbientTemp(
+                    for: state.atmosphere,
+                    biome: state.currentBiome,
+                    thermalMode: state.thermalMode,
+                    localOutdoorTempC: state.localOutdoorTempC
+                )
                 VStack(spacing: 3) {
-                    HStack {
-                        Text(state.currentBiome == .aquatic ? "水温" : "温度").foregroundColor(textMuted)
-                        Spacer()
-                        Text("\(state.temperature)°C").bold().foregroundColor(textMain)
+                    HStack(spacing: 3) {
+                        Text(state.currentBiome == .aquatic ? "水温" : "温度")
+                            .foregroundColor(textMuted)
+                            .fixedSize(horizontal: true, vertical: false)
+                        Spacer(minLength: 2)
+                        if state.thermalMode != .natural && targetTemp != state.temperature {
+                            Text("→\(targetTemp)°")
+                                .font(.system(size: 9.5, design: .monospaced))
+                                .foregroundColor(state.thermalMode == .heating ? Color.orange : Color.cyan)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        Text("\(state.temperature)°C")
+                            .bold()
+                            .foregroundColor(textMain)
+                            .fixedSize(horizontal: true, vertical: false)
                     }
-                    HStack(spacing: 4) {
+                    HStack(spacing: 3) {
                         let tempSubtitle = (state.localOutdoorTempC != nil) ? "\(state.tempHint)·外\(state.localOutdoorTempC!)°" : state.tempHint
                         Text(tempSubtitle)
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(.system(size: 9.5, design: .monospaced))
                             .foregroundColor(textMuted)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                            .truncationMode(.tail)
                             .help(state.localOutdoorTempC != nil ? "已联动\(state.localCityName ?? "本地")实时气温 \(state.localOutdoorTempC!)°C" : "正在同步本地实时气温")
-                        Spacer()
-                        Button(state.hasHeatLamp ? "☀️" : "☀️\(TerrariumConfig.heatLampCost)点") {
+                        Spacer(minLength: 2)
+                        Button(state.hasHeatLamp ? "☀️" : "☀️\(TerrariumConfig.heatLampCost)") {
                             state.toggleThermalMode(.heating)
                         }
                         .buttonStyle(.plain)
                         .font(.system(size: 9.5, design: .monospaced))
+                        .fixedSize(horizontal: true, vertical: false)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
                         .background(state.thermalMode == .heating ? Color.orange : bgHeader)
                         .foregroundColor(state.thermalMode == .heating ? .black : (state.hasHeatLamp ? textMain : adminAmber))
                         .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
-                        .help(state.hasHeatLamp ? "夹缸加热器 (+6°C 稳态升温)" : "消耗 \(TerrariumConfig.heatLampCost) 生态点购置并夹装加热灯/棒")
+                        .help(state.hasHeatLamp ? "夹缸加热器 (+6°C 稳态升温至 \(targetTemp)°C)" : "消耗 \(TerrariumConfig.heatLampCost) 生态点购置并夹装加热灯/棒")
 
-                        Button(state.hasCoolingFan ? "❄️" : "❄️\(TerrariumConfig.coolingFanCost)点") {
+                        Button(state.hasCoolingFan ? "❄️" : "❄️\(TerrariumConfig.coolingFanCost)") {
                             state.toggleThermalMode(.cooling)
                         }
                         .buttonStyle(.plain)
                         .font(.system(size: 9.5, design: .monospaced))
+                        .fixedSize(horizontal: true, vertical: false)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
                         .background(state.thermalMode == .cooling ? Color.cyan : bgHeader)
                         .foregroundColor(state.thermalMode == .cooling ? .black : (state.hasCoolingFan ? textMain : adminAmber))
                         .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
-                        .help(state.hasCoolingFan ? "夹缸降温扇 (-4°C 稳态降温)" : "消耗 \(TerrariumConfig.coolingFanCost) 生态点购置并夹装降温扇")
+                        .help(state.hasCoolingFan ? "夹缸降温扇 (-4°C 稳态降温至 \(targetTemp)°C)" : "消耗 \(TerrariumConfig.coolingFanCost) 生态点购置并夹装降温扇")
 
                         if state.isAdminMode {
                             miniBtn("-", action: { state.adjustTemp(-1) })
@@ -423,7 +463,8 @@ struct MenuBarPopoverView: View {
                     }
                 }
                 .font(.system(size: 11, design: .monospaced))
-                .padding(7)
+                .padding(6)
+                .frame(maxWidth: .infinity)
                 .background(bgCard)
                 .overlay(Rectangle().stroke(borderCol, lineWidth: 1.5))
 
@@ -435,24 +476,35 @@ struct MenuBarPopoverView: View {
                     onMinus: { state.adjustHumidity(-5) },
                     onPlus: { state.adjustHumidity(5) }
                 )
+                .frame(maxWidth: .infinity)
                 VStack(spacing: 3) {
-                    HStack {
-                        Text(state.currentBiome == .aquatic ? "浮圈" : "食盆").foregroundColor(textMuted)
-                        Spacer()
-                        Text("\(state.foodBowlPortions)/\(TerrariumConfig.maxFoodPortions)").bold().foregroundColor(textMain)
+                    HStack(spacing: 3) {
+                        Text(state.currentBiome == .aquatic ? "浮圈" : "食盆")
+                            .foregroundColor(textMuted)
+                            .fixedSize(horizontal: true, vertical: false)
+                        Spacer(minLength: 2)
+                        Text("\(state.foodBowlPortions)/\(TerrariumConfig.maxFoodPortions)")
+                            .bold()
+                            .foregroundColor(textMain)
+                            .fixedSize(horizontal: true, vertical: false)
                     }
-                    HStack {
+                    HStack(spacing: 3) {
                         Text("住民:\(state.activeDisplayCritters.count)")
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(.system(size: 9.5, design: .monospaced))
                             .foregroundColor(textMuted)
-                        Spacer()
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        Spacer(minLength: 2)
                         Text("植株:\(state.plants.count)/\(TerrariumConfig.maxPlantsCap)")
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(.system(size: 9.5, design: .monospaced))
                             .foregroundColor(textMuted)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
                 .font(.system(size: 11, design: .monospaced))
-                .padding(7)
+                .padding(6)
+                .frame(maxWidth: .infinity)
                 .background(bgCard)
                 .overlay(Rectangle().stroke(borderCol, lineWidth: 1.5))
             }
@@ -576,9 +628,115 @@ struct MenuBarPopoverView: View {
             }
         }
         .font(.system(size: 11, design: .monospaced))
-        .padding(7)
+        .padding(6)
         .background(bgCard)
         .overlay(Rectangle().stroke(borderCol, lineWidth: 1.5))
+    }
+
+    private var appVersionLabel: String {
+        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.2.1"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "v\(short) (\(build))"
+    }
+
+    private var settingsOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.55)
+                .onTapGesture {
+                    state.isConfirmingResetSave = false
+                    state.isShowingSettings = false
+                }
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("⚙️ 游戏设置")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundColor(textMain)
+                    Spacer()
+                    Button("×") {
+                        state.isConfirmingResetSave = false
+                        state.isShowingSettings = false
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .foregroundColor(textMuted)
+                }
+
+                Divider().background(borderCol)
+
+                HStack {
+                    Text("游戏版本")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(textMuted)
+                    Spacer()
+                    Text("Pixel Terrarium \(appVersionLabel)")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(textMain)
+                }
+
+                HStack {
+                    Text("存档格式")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(textMuted)
+                    Spacer()
+                    Text("schemaVersion v\(TerrariumSaveData().schemaVersion)")
+                        .font(.system(size: 10.5, design: .monospaced))
+                        .foregroundColor(textMuted)
+                }
+
+                Divider().background(borderCol)
+
+                if !state.isConfirmingResetSave {
+                    Button {
+                        state.isConfirmingResetSave = true
+                    } label: {
+                        Text("重置存档（新开局）")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(Color.red.opacity(0.22))
+                            .foregroundColor(Color(red: 0.99, green: 0.72, blue: 0.68))
+                            .overlay(Rectangle().stroke(Color.red.opacity(0.55), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("⚠️ 将清空所有生态缸、生态点与图鉴，恢复 Day 0 初始状态，确认重置？")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(Color(red: 0.99, green: 0.80, blue: 0.76))
+                        HStack(spacing: 8) {
+                            Button("确认重置") {
+                                state.resetSaveData()
+                                state.isConfirmingResetSave = false
+                                state.isShowingSettings = false
+                            }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 5)
+                            .background(Color.red.opacity(0.85))
+                            .foregroundColor(.white)
+                            .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+
+                            Button("取消") {
+                                state.isConfirmingResetSave = false
+                            }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 10.5, design: .monospaced))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 5)
+                            .background(bgCard)
+                            .foregroundColor(textMuted)
+                            .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                        }
+                    }
+                }
+            }
+            .padding(12)
+            .frame(width: 310)
+            .background(bgHeader)
+            .overlay(Rectangle().stroke(borderCol, lineWidth: 2))
+        }
     }
 
     private func miniBtn(_ title: String, action: @escaping () -> Void) -> some View {

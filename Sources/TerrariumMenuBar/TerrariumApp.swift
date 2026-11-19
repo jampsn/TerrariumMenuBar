@@ -67,7 +67,7 @@ struct TerrariumMenuBarApp: App {
             "plant_succulent_sheet", "plant_cactus_sheet", "plant_aloe_sheet",
             "plant_monstera_sheet", "plant_bromeliad_sheet", "plant_orchid_sheet",
             "plant_marimo_sheet", "plant_anubias_sheet", "plant_lotus_sheet",
-            "vfx_dew_drop_sheet", "vfx_glass_mist", "vfx_glass_streak_sheet",
+            "vfx_dew_drop_sheet", "vfx_glass_mist", "vfx_glass_streak_sheet", "vfx_aquatic_algae",
             "char_frog_sheet", "char_snail_sheet", "char_pillbug_sheet", "char_rhino_beetle_sheet", "char_beetle_sheet",
             "char_gecko_sheet", "char_scarab_sheet", "char_firefly_sheet", "char_moth_sheet",
             "char_leaf_insect_sheet", "char_hercules_sheet",
@@ -195,11 +195,13 @@ struct TerrariumMenuBarApp: App {
             Foundation.exit(1)
         }
 
-        // 3d. 验证夹缸加热灯付费购置 + 多实例购置热带雨林/碧波鱼缸 + 拆缸退点
+        // 3d. 验证夹缸加热灯付费购置（且连点 2 次不得瞬时跳变温度）+ 多实例购置热带雨林/碧波鱼缸 + 拆缸退点
         let tempBeforeHeat = state.temperature
         state.toggleThermalMode(.heating)
-        guard state.hasHeatLamp, state.thermalMode == .heating, state.temperature >= tempBeforeHeat else {
-            fputs("SELF_TEST_FAIL: Thermal heat lamp purchase & toggle failed.\n", stderr)
+        state.toggleThermalMode(.heating)
+        state.toggleThermalMode(.heating)
+        guard state.hasHeatLamp, state.thermalMode == .heating, state.temperature == tempBeforeHeat else {
+            fputs("SELF_TEST_FAIL: Thermal heat lamp purchase & anti-burst toggle failed.\n", stderr)
             Foundation.exit(1)
         }
         guard state.purchaseNewTank(biome: .rainforest, customName: "测试雨林"),

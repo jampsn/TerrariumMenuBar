@@ -109,6 +109,10 @@ final class StageAnimator: ObservableObject {
         guard let state = boundState else { return }
         let containerChanged = (lastSyncedContainerID != state.activeContainerID)
         lastSyncedContainerID = state.activeContainerID
+        if containerChanged {
+            // 切换生态缸时清空旧缸残留粒子（防止鱼缸气泡带入陆地缸）
+            particles.removeAll()
+        }
         let activeList = state.activeDisplayCritters
         var updated: [CritterRuntime] = []
 
@@ -904,6 +908,9 @@ final class StageAnimator: ObservableObject {
 
             switch p.kind {
             case .bubble:
+                if boundState?.currentBiome != .aquatic {
+                    continue
+                }
                 if !p.isPopping {
                     // 0.8s 缓升起步 -> 缓慢匀速上浮 -> 触及水面 gz=38.0 破灭成微环
                     let ramp = min(1.0, Double(p.age) / 12.0)

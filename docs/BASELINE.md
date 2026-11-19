@@ -76,6 +76,9 @@
 | **PM-04** | 内存与定时器 | `StageAnimator` 粒子分裂若无预算上限或缺少 `deinit` 清理 `Timer`，长期挂机将引发内存/CPU 爬升。 | 粒子严格受预算上限裁剪；`StageAnimator` / `TerrariumState` 必须在 `deinit` 销毁 `Timer` 与 Combine 订阅。 |
 | **PM-05** | 休眠交互 | 休眠冻结模式下若允许切氛围或点击触发演化，会被用于白嫖解锁。 | 休眠状态严格冻结状态流转与演化产出。 |
 | **PM-06** | 资源校验 | 新增或重命名 PNG 资产时若未同步校验，打包运行会静默缺图。 | 任何 PNG 变更后必须通过 `--self-test` 全量资产存在性校验（确保 exit code 0）。 |
+| **PM-07** | 温控交互 | `toggleThermalMode` 在开关切入时若附带瞬时 `±2°C` 硬改，会导致玩家连点 2 次（关→开）无冷却刷温，绕过 180s/1°C 热传导节奏。 | 温控开关仅更新 `thermalMode` 与重置 `ambientRelaxSeconds = 0`，严禁在点击回调中直接增减 `temperature`。 |
+| **PM-08** | 45° 渲染 | 在 45° 等距箱庭中使用直角 `CGRect` 遮罩（如鱼缸绿藻）或平视双层背景会严重割裂立体透视；睡莲成熟期长茎根爪亦会破坏水体通透感。 | 水体染色必须沿 `isoToScreen` 六边形轮廓绘制并辅以贴壁像素藻斑；睡莲仅在 `.sprout` 幼苗期绘制半透明细芽茎。 |
+| **PM-09** | 粒子隔离 | 切换生态缸时 `StageAnimator.particles` 若未清空，鱼缸上浮气泡会残留在陆地缸舞台中。 | `syncCrittersFromState` 检测到 `containerChanged` 时必须立即清空 `particles`，且 `.bubble` 仅在 `.aquatic` 保留。 |
 
 ---
 

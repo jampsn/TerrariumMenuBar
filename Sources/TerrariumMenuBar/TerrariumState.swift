@@ -29,6 +29,8 @@ final class TerrariumState: ObservableObject {
     @Published var hasHeatLamp: Bool = false
     @Published var hasCoolingFan: Bool = false
     @Published var isShowingBuyTankSheet: Bool = false
+    @Published var isShowingSettings: Bool = false
+    @Published var isConfirmingResetSave: Bool = false
     @Published var isConfirmingDeleteTank: Bool = false
     @Published var atmosphere: SceneAtmosphere = .day
     @Published var temperature: Int = 22
@@ -932,16 +934,10 @@ final class TerrariumState: ObservableObject {
 
         switch nextMode {
         case .heating:
-            if inst.temperature < targetAmbient {
-                inst.temperature = min(targetAmbient, inst.temperature + 2)
-            }
             let equipName = (inst.biome == .aquatic) ? "恒温加热棒" : "夹缸晒背灯"
-            bannerNotice = "☀️ 已开启\(equipName)：稳态升温至 \(targetAmbient)°C"
+            bannerNotice = "☀️ 已开启\(equipName)：正随时间稳态升温至 \(targetAmbient)°C"
         case .cooling:
-            if inst.temperature > targetAmbient {
-                inst.temperature = max(targetAmbient, inst.temperature - 2)
-            }
-            bannerNotice = "❄️ 已开启夹缸降温扇：稳态降温至 \(targetAmbient)°C"
+            bannerNotice = "❄️ 已开启夹缸降温扇：正随时间稳态降温至 \(targetAmbient)°C"
         case .natural:
             bannerNotice = "🌿 已关闭温控器材，回归自然室温 (\(targetAmbient)°C)"
         }

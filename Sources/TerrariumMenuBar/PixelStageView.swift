@@ -439,9 +439,13 @@ struct PixelStageView: View {
                         let fIdx = isSprout ? 2 : (isWilting ? 3 : (state.isSleeping ? 0 : ((animator.tick / 10 + idx) % 2)))
                         drawSheetFrame(in: &ctx, sheet: "plant_anubias_sheet", frameIndex: fIdx, frameSize: CGSize(width: 22, height: 20), screenPos: screenPos, anchor: CGPoint(x: 11, y: 16))
                     case "lotus":
-                        // 水下细茎贯穿缸底 (gz=0) 直连水面 (gz=38) 浮叶
-                        let stemFrame = state.isSleeping ? 0 : ((animator.tick / 12 + idx) % 2)
-                        drawSheetFrame(in: &ctx, sheet: "plant_lotus_stem", frameIndex: stemFrame, frameSize: CGSize(width: 8, height: 40), screenPos: screenPos, anchor: CGPoint(x: 4, y: 38))
+                        // 仅在幼苗期绘制半透明水下细芽茎；成熟期与枯萎期不再保留水下茎与根部，保持水体通透美观
+                        if isSprout {
+                            let stemFrame = state.isSleeping ? 0 : ((animator.tick / 12 + idx) % 2)
+                            ctx.opacity = 0.50
+                            drawSheetFrame(in: &ctx, sheet: "plant_lotus_stem", frameIndex: stemFrame, frameSize: CGSize(width: 8, height: 40), screenPos: screenPos, anchor: CGPoint(x: 4, y: 38))
+                            ctx.opacity = 1.0
+                        }
                     default:
                         let fIdx = isSprout ? 3 : (isWilting ? 4 : (state.isSleeping ? 0 : ((animator.tick / 8 + idx) % 3)))
                         drawSheetFrame(in: &ctx, sheet: "plant_red_shroom_sheet", frameIndex: fIdx, frameSize: CGSize(width: 16, height: 16), screenPos: screenPos, anchor: CGPoint(x: 8, y: 13))
@@ -624,30 +628,55 @@ struct PixelStageView: View {
             }
 
             // ==================== Pass 6: 透明水体叠加层、水面浮叶与喂食圈、前玻璃框 ====================
-            if state.glassFogLevel > 0.05 {
-                if state.currentBiome == .aquatic {
-                    // 碧波鱼缸：超长周期累积的轻微绿藻膜（替代陆生白色水雾）
-                    context.fill(
-                        Path(CGRect(x: 24 * scale, y: 54 * scale, width: 176 * scale, height: 92 * scale)),
-                        with: .color(Color(red: 0.24, green: 0.54, blue: 0.34).opacity(min(0.22, state.glassFogLevel * 0.24)))
-                    )
-                } else {
-                    if let mistNS = PixelAssetLoader.nsImage(named: "vfx_glass_mist") {
-                        context.opacity = min(0.85, state.glassFogLevel)
-                        context.draw(Image(nsImage: mistNS).interpolation(.none), in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
-                        context.opacity = 1.0
-                    }
-                    if state.glassFogLevel >= 0.45 && !state.isSleeping {
-                        let streakFrame = (animator.tick / 6) % 3
-                        drawSheetFrame(in: &context, sheet: "vfx_glass_streak_sheet", frameIndex: streakFrame, frameSize: CGSize(width: 6, height: 24), screenPos: CGPoint(x: 56, y: 92), anchor: CGPoint(x: 3, y: 0))
-                        drawSheetFrame(in: &context, sheet: "vfx_glass_streak_sheet", frameIndex: (streakFrame + 1) % 3, frameSize: CGSize(width: 6, height: 24), screenPos: CGPoint(x: 168, y: 96), anchor: CGPoint(x: 3, y: 0))
-                    }
+            if state.glassFogLevel > 0.05 && state.currentBiome != .aquatic {
+                if let mistNS = PixelAssetLoader.nsImage(named: "vfx_glass_mist") {
+                    context.opacity = min(0.85, state.glassFogLevel)
+                    context.draw(Image(nsImage: mistNS).interpolation(.none), in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
+                    context.opacity = 1.0
+                }
+                if state.glassFogLevel >= 0.45 && !state.isSleeping {
+                    let streakFrame = (animator.tick / 6) % 3
+                    drawSheetFrame(in: &context, sheet: "vfx_glass_streak_sheet", frameIndex: streakFrame, frameSize: CGSize(width: 6, height: 24), screenPos: CGPoint(x: 56, y: 92), anchor: CGPoint(x: 3, y: 0))
+                    drawSheetFrame(in: &context, sheet: "vfx_glass_streak_sheet", frameIndex: (streakFrame + 1) % 3, frameSize: CGSize(width: 6, height: 24), screenPos: CGPoint(x: 168, y: 96), anchor: CGPoint(x: 3, y: 0))
                 }
             }
 
             // 鱼缸透明水体与 Pass 6b 水面浮点层（水面 gz = 38.0：喂食圈、浮水睡莲、触面破灭水环）
             if state.currentBiome == .aquatic {
                 drawFullImage("tank_water_overlay")
+
+                // 鱼缸藻垢：严格贴合 45° 等距水体六边形轮廓渐进变绿 + 缸壁像素绿藻斑块
+                if state.glassFogLevel > 0.05 {
+                    let cols = Double(TerrariumConfig.gridCols)
+                    let rows = Double(TerrariumConfig.gridRows)
+                    let gzTop = TerrariumConfig.waterSurfaceGZ
+                    let topBack = TerrariumConfig.isoToScreen(gx: 0, gy: 0, gz: gzTop)
+                    let topLeft = TerrariumConfig.isoToScreen(gx: 0, gy: rows, gz: gzTop)
+                    let botLeft = TerrariumConfig.isoToScreen(gx: 0, gy: rows, gz: 0)
+                    let botFront = TerrariumConfig.isoToScreen(gx: cols, gy: rows, gz: 0)
+                    let botRight = TerrariumConfig.isoToScreen(gx: cols, gy: 0, gz: 0)
+                    let topRight = TerrariumConfig.isoToScreen(gx: cols, gy: 0, gz: gzTop)
+
+                    var waterHull = Path()
+                    waterHull.move(to: CGPoint(x: topBack.x * scale, y: topBack.y * scale))
+                    waterHull.addLine(to: CGPoint(x: topLeft.x * scale, y: topLeft.y * scale))
+                    waterHull.addLine(to: CGPoint(x: botLeft.x * scale, y: botLeft.y * scale))
+                    waterHull.addLine(to: CGPoint(x: botFront.x * scale, y: botFront.y * scale))
+                    waterHull.addLine(to: CGPoint(x: botRight.x * scale, y: botRight.y * scale))
+                    waterHull.addLine(to: CGPoint(x: topRight.x * scale, y: topRight.y * scale))
+                    waterHull.closeSubpath()
+
+                    context.fill(
+                        waterHull,
+                        with: .color(Color(red: 0.22, green: 0.56, blue: 0.30).opacity(min(0.28, state.glassFogLevel * 0.30)))
+                    )
+
+                    if let algaeNS = PixelAssetLoader.nsImage(named: "vfx_aquatic_algae") {
+                        context.opacity = min(0.92, state.glassFogLevel * 0.95)
+                        context.draw(Image(nsImage: algaeNS).interpolation(.none), in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
+                        context.opacity = 1.0
+                    }
+                }
 
                 // 水面移栽睡莲可放置网格（所见即所点）
                 if state.isMovingPlant, let selPlant = state.selectedPlant, TerrariumConfig.plantSurfaceGZ(for: selPlant) > 0 {
