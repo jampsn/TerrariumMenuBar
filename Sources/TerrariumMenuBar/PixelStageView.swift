@@ -888,6 +888,12 @@ struct PixelStageView: View {
         .onDisappear {
             animator.stop()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
+            animator.pauseRendering()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+            animator.resumeRendering()
+        }
     }
 
     private func critterFrameIndex(for c: CritterRuntime, globalTick: Int) -> Int {

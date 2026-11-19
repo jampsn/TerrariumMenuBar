@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 import SwiftUI
 import TerrariumCore
 
@@ -765,9 +766,27 @@ struct MenuBarPopoverView: View {
     }
 
     private var appVersionLabel: String {
-        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.2.1"
+        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.2.3"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return "v\(short) (\(build))"
+    }
+
+    private var isLaunchAtLoginEnabled: Bool {
+        SMAppService.mainApp.status == .enabled
+    }
+
+    private func toggleLaunchAtLogin() {
+        do {
+            if SMAppService.mainApp.status == .enabled {
+                try SMAppService.mainApp.unregister()
+                state.bannerNotice = "已关闭开机自动启动"
+            } else {
+                try SMAppService.mainApp.register()
+                state.bannerNotice = "✅ 已开启开机自动启动"
+            }
+        } catch {
+            state.bannerNotice = "⚠️ 需从 .app 打包应用运行以配置开机自启"
+        }
     }
 
     private var settingsOverlay: some View {
@@ -813,6 +832,23 @@ struct MenuBarPopoverView: View {
                     Text("schemaVersion v\(TerrariumSaveData().schemaVersion)")
                         .font(.system(size: 10.5, design: .monospaced))
                         .foregroundColor(textMuted)
+                }
+
+                HStack {
+                    Text("开机自启")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(textMuted)
+                    Spacer()
+                    Button(isLaunchAtLoginEnabled ? "已开启" : "未开启") {
+                        toggleLaunchAtLogin()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(isLaunchAtLoginEnabled ? accentGreen : bgCard)
+                    .foregroundColor(isLaunchAtLoginEnabled ? .white : textMuted)
+                    .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
                 }
 
                 Divider().background(borderCol)
@@ -982,7 +1018,6 @@ struct MenuBarPopoverView: View {
                 }
             }
         }
-        .frame(height: 446)
     }
 
     private var crittersTabContent: some View {
@@ -1101,7 +1136,6 @@ struct MenuBarPopoverView: View {
                 }
             }
         }
-        .frame(height: 446)
     }
 
     private var codexTabContent: some View {
@@ -1143,6 +1177,5 @@ struct MenuBarPopoverView: View {
                 }
             }
         }
-        .frame(height: 446)
     }
 }

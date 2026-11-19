@@ -476,6 +476,29 @@ runTest("test_economyRebalance_offlineDecay_andNewDecorCatalog") {
     check(!walkBlocked.contains(GridCoord(col: 5, row: 2)), "汀步石与风蚀拱应允许小动物踩踏/穿行，不得阻挡寻路")
 }
 
+runTest("test_persistenceBackupRecovery_andCorruptedIsolation") {
+    let tmpDir = FileManager.default.temporaryDirectory.appendingPathComponent("terrarium_bak_test_\(UUID().uuidString)", isDirectory: true)
+    let saveURL = tmpDir.appendingPathComponent("save.json")
+    let persistence = TerrariumPersistence(fileURL: saveURL)
+    defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+    var d1 = TerrariumSaveData()
+    d1.ecoPoints = 42
+    check(persistence.save(d1), "首次保存应成功")
+
+    var d2 = d1
+    d2.ecoPoints = 88
+    check(persistence.save(d2), "二次保存应轮转生成 .json.bak 备份")
+    check(FileManager.default.fileExists(atPath: persistence.backupURL.path), "应存在 save.json.bak 备份文件")
+
+    // 破坏主档 save.json
+    try? "{ broken json".data(using: .utf8)?.write(to: saveURL)
+    let recovered = persistence.load()
+    check(recovered?.ecoPoints == 42, "主档损坏时应自动从 .bak 恢复上一份有效存档(42点)，实际=\(recovered?.ecoPoints ?? -1)")
+    let files = (try? FileManager.default.contentsOfDirectory(atPath: tmpDir.path)) ?? []
+    check(files.contains(where: { $0.hasPrefix("save.corrupted.") }), "损坏的主档应被隔离保留而非静默删除")
+}
+
 print("\nSummary: \(passedCount) passed, \(failedCount) failed.")
 if failedCount > 0 {
     Foundation.exit(1)

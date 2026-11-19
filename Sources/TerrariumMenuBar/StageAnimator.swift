@@ -260,6 +260,10 @@ final class StageAnimator: ObservableObject {
     }
 
     func start() {
+        resumeRendering()
+    }
+
+    func resumeRendering() {
         guard timer == nil else { return }
         isRunning = true
         let newTimer = Timer(timeInterval: 1.0 / 15.0, repeats: true) { [weak self] _ in
@@ -272,10 +276,14 @@ final class StageAnimator: ObservableObject {
         timer = newTimer
     }
 
-    func stop() {
+    func pauseRendering() {
         isRunning = false
         timer?.invalidate()
         timer = nil
+    }
+
+    func stop() {
+        pauseRendering()
         cancellable?.cancel()
         cancellable = nil
         particles.removeAll()
@@ -290,7 +298,9 @@ final class StageAnimator: ObservableObject {
                 critterRuntimes[idx].path.removeAll()
                 updateSmoothAltitude(&critterRuntimes[idx])
             }
-            updateParticles()
+            if !particles.isEmpty {
+                updateParticles()
+            }
             return
         }
 

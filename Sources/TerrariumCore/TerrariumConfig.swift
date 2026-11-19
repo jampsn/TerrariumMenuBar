@@ -125,6 +125,24 @@ public enum TerrariumConfig {
 
     public static let optimalTempRange: ClosedRange<Int> = 20...26
     public static let optimalHumidityRange: ClosedRange<Int> = 55...75
+
+    public static func optimalTempRange(for biome: TerrariumBiome) -> ClosedRange<Int> {
+        switch biome {
+        case .meadow: return optimalTempRange
+        case .sand: return 24...32
+        case .rainforest: return 23...29
+        case .aquatic: return 22...28
+        }
+    }
+
+    public static func optimalHumidityRange(for biome: TerrariumBiome) -> ClosedRange<Int> {
+        switch biome {
+        case .meadow: return optimalHumidityRange
+        case .sand: return 25...50
+        case .rainforest: return 65...88
+        case .aquatic: return 60...98
+        }
+    }
     public static let ecoPointMinHumidity: Int = 35
     public static let sandEcoPointMinHumidity: Int = 26
 

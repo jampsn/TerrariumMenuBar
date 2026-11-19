@@ -1,7 +1,10 @@
 import Combine
 import Foundation
+import os
 import SwiftUI
 import TerrariumCore
+
+private let stateLogger = Logger(subsystem: "com.ccgs.TerrariumMenuBar", category: "State")
 
 enum PetOutcome: Equatable {
     case gained(delta: Int, newStage: TerrariumConfig.AffinityStage, leveledUp: Bool)
@@ -84,6 +87,10 @@ final class TerrariumState: ObservableObject {
         let now = Date()
 
         if var loaded = persistence.load() {
+            if loaded.containers.isEmpty {
+                stateLogger.error("Loaded save had empty containers; restoring default meadow tank.")
+                loaded = TerrariumSaveData()
+            }
             var migratedStowed: [CritterKind] = []
             for idx in loaded.containers.indices {
                 var inst = loaded.containers[idx].instance
@@ -265,15 +272,21 @@ final class TerrariumState: ObservableObject {
     }
 
     var tempHint: String {
-        if temperature < 20 { return "偏凉" }
-        if temperature > 26 { return "偏暖" }
+        let opt = TerrariumConfig.optimalTempRange(for: currentBiome)
+        if temperature < opt.lowerBound { return "偏凉" }
+        if temperature > opt.upperBound { return "偏暖" }
         return "适宜"
     }
 
     var humHint: String {
-        if humidity < 55 { return "干燥" }
-        if humidity > 75 { return "潮湿" }
-        return "温润"
+        let opt = TerrariumConfig.optimalHumidityRange(for: currentBiome)
+        if currentBiome == .aquatic {
+            if humidity < opt.lowerBound { return "缺氧" }
+            return "溶氧足"
+        }
+        if humidity < opt.lowerBound { return "偏干" }
+        if humidity > opt.upperBound { return "偏湿" }
+        return "适宜"
     }
 
     // MARK: - 管理员模式切换
@@ -370,8 +383,13 @@ final class TerrariumState: ObservableObject {
     func refreshLocalWeatherIfNeeded(force: Bool = false) async {
         let now = Date()
         guard force || now.timeIntervalSince(lastWeatherFetchAt) >= 1800.0 else { return }
+        guard let reading = await LocalWeatherService.fetchCurrentLocalTemperature() else {
+            // 请求失败时仅冷却 60 秒后允许重试，避免直接锁定 30 分钟
+            lastWeatherFetchAt = now.addingTimeInterval(-1740.0)
+            stateLogger.warning("LocalWeatherService fetch failed; will retry in 60s.")
+            return
+        }
         lastWeatherFetchAt = now
-        guard let reading = await LocalWeatherService.fetchCurrentLocalTemperature() else { return }
 
         saveData.lastKnownLocalTempC = reading.tempC
         saveData.lastKnownLocalCity = reading.city
