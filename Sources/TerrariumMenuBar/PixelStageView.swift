@@ -686,7 +686,7 @@ struct PixelStageView: View {
                     case .crystalShrimp:
                         drawSheetFrame(in: &ctx, sheet: "char_crystal_shrimp_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 14, height: 11), screenPos: screenPos, anchor: CGPoint(x: 7, y: 9), flippedX: !c.facingRight)
                     case .clownfish:
-                        drawSheetFrame(in: &ctx, sheet: "char_clownfish_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 20, height: 16), screenPos: screenPos, anchor: CGPoint(x: 10, y: 8), flippedX: !c.facingRight)
+                        drawSheetFrame(in: &ctx, sheet: "char_clownfish_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 15, height: 11), screenPos: screenPos, anchor: CGPoint(x: 7.5, y: 6), flippedX: !c.facingRight)
                     case .starfish:
                         drawSheetFrame(in: &ctx, sheet: "char_starfish_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 16, height: 12), screenPos: screenPos, anchor: CGPoint(x: 8, y: 9), flippedX: !c.facingRight)
                     case .cleanerShrimp:

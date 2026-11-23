@@ -434,7 +434,7 @@ public enum TerrariumConfig {
             ]
         case .reef:
             return [
-                critterSpec(kind: .clownfish, biome: .reef, cost: 18, group: .reefSymbiosis, assetName: "char_clownfish_sheet", w: 20, h: 16),
+                critterSpec(kind: .clownfish, biome: .reef, cost: 18, group: .reefSymbiosis, assetName: "char_clownfish_sheet", w: 15, h: 11),
                 critterSpec(kind: .starfish, biome: .reef, cost: 12, group: .reefSymbiosis, assetName: "char_starfish_sheet", w: 16, h: 12),
                 critterSpec(kind: .cleanerShrimp, biome: .reef, cost: 14, group: .reefSymbiosis, assetName: "char_cleaner_shrimp_sheet", w: 18, h: 14),
                 critterSpec(kind: .blueTang, biome: .reef, cost: 26, group: .reefSymbiosis, assetName: "char_blue_tang_sheet", w: 22, h: 16),
