@@ -105,7 +105,9 @@ Pixel Terrarium is **100% free and open source**. If this tiny world brings calm
 <details>
 <summary>📱 微信赞赏码（点击展开 / WeChat Appreciation）</summary>
 
-> 可在此处放入你的微信赞赏码图片（建议放在 `docs/assets/` 后通过相对路径引用）。
+<p align="left">
+  <img src="docs/assets/wechat_reward.png" alt="微信赞赏码" width="260" />
+</p>
 
 </details>
 
