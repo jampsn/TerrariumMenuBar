@@ -39,12 +39,12 @@ public enum TerrariumConfig {
     public static let maxFoodPortions: Int = 5
 
     public static func feedingCoord(for biome: TerrariumBiome) -> GridCoord {
-        (biome == .aquatic) ? aquaticFeedingCoord : foodBowlCoord
+        (biome == .aquatic || biome == .reef) ? aquaticFeedingCoord : foodBowlCoord
     }
 
     public static func feedingProtectedCoords(for biome: TerrariumBiome) -> Set<GridCoord> {
-        // 鱼缸喂食圈漂浮在后方水面 gz=38，仅保护 (1,2) 不种浮水睡莲，彻底释放前景 (9,9)..(10,10) 6格供造景
-        (biome == .aquatic) ? [aquaticFeedingCoord] : foodBowlProtectedCoords
+        // 鱼缸/海缸喂食圈漂浮在后方水面 gz=38，仅保护 (1,2)，彻底释放前景 (9,9)..(10,10) 6格供造景
+        (biome == .aquatic || biome == .reef) ? [aquaticFeedingCoord] : foodBowlProtectedCoords
     }
 
     /// 食盆本体、后方进食槽位及正前方三格净空保护（严禁植物/摆件遮挡）
@@ -66,20 +66,20 @@ public enum TerrariumConfig {
 
     public static func decorDimensions(for decorID: String) -> (cols: Int, rows: Int) {
         switch decorID {
-        case "driftwood", "sand_wood", "rainforest_vine", "aquatic_driftwood": return (3, 2)
-        case "shallow_pool", "sand_rock", "boulder", "rainforest_waterfall", "rainforest_bark", "aquatic_bubble_rock", "aquatic_castle": return (2, 2)
-        case "sand_pebbles", "meadow_stepping_stones", "sand_rib_arch", "rainforest_slate_ledge", "aquatic_seiryu_stone": return (2, 1)
+        case "driftwood", "sand_wood", "rainforest_vine", "aquatic_driftwood", "reef_live_rock": return (3, 2)
+        case "shallow_pool", "sand_rock", "boulder", "rainforest_waterfall", "rainforest_bark", "aquatic_bubble_rock", "aquatic_castle", "reef_wavemaker", "reef_coral_cave": return (2, 2)
+        case "sand_pebbles", "meadow_stepping_stones", "sand_rib_arch", "rainforest_slate_ledge", "aquatic_seiryu_stone", "reef_giant_clam", "reef_sand_shells": return (2, 1)
         default: return (1, 1)
         }
     }
 
     public static func defaultDecorOrigin(for decorID: String) -> GridCoord {
         switch decorID {
-        case "shallow_pool", "sand_rock", "rainforest_waterfall", "aquatic_bubble_rock": return GridCoord(col: 8, row: 1)
-        case "driftwood", "sand_wood", "rainforest_vine", "aquatic_driftwood": return GridCoord(col: 2, row: 3)
-        case "boulder", "rainforest_bark", "aquatic_castle": return GridCoord(col: 1, row: 7)
-        case "sand_pebbles": return GridCoord(col: 8, row: 7)
-        case "meadow_stepping_stones", "sand_rib_arch", "rainforest_slate_ledge", "aquatic_seiryu_stone": return GridCoord(col: 5, row: 2)
+        case "shallow_pool", "sand_rock", "rainforest_waterfall", "aquatic_bubble_rock", "reef_wavemaker": return GridCoord(col: 8, row: 1)
+        case "driftwood", "sand_wood", "rainforest_vine", "aquatic_driftwood", "reef_live_rock": return GridCoord(col: 2, row: 3)
+        case "boulder", "rainforest_bark", "aquatic_castle", "reef_coral_cave": return GridCoord(col: 1, row: 7)
+        case "sand_pebbles", "reef_sand_shells": return GridCoord(col: 8, row: 7)
+        case "meadow_stepping_stones", "sand_rib_arch", "rainforest_slate_ledge", "aquatic_seiryu_stone", "reef_giant_clam": return GridCoord(col: 5, row: 2)
         case "meadow_mushroom_log", "sand_cairn", "rainforest_bromeliad_stump", "aquatic_bamboo_tube": return GridCoord(col: 4, row: 7)
         default: return GridCoord(col: 5, row: 5)
         }
@@ -102,11 +102,12 @@ public enum TerrariumConfig {
     }
 
     public static func decorBlocksMovement(_ decorID: String) -> Bool {
-        // 浅水洼、卵石滩、汀步石与风蚀拱允许动物涉水/踩踏/穿过，不死堵路径
+        // 浅水洼、卵石滩、汀步石、风蚀拱与白沙贝壳滩允许动物涉水/踩踏/穿过，不死堵路径
         decorID != "shallow_pool"
             && decorID != "sand_pebbles"
             && decorID != "meadow_stepping_stones"
             && decorID != "sand_rib_arch"
+            && decorID != "reef_sand_shells"
     }
 
     public static func anchorGridPos(for decorID: String, decorOrigins: [String: GridCoord] = [:]) -> (gx: Double, gy: Double) {
@@ -122,6 +123,9 @@ public enum TerrariumConfig {
     public static let tempRange: ClosedRange<Int> = 10...35
     public static let humidityRange: ClosedRange<Int> = 20...98
     public static let humiditySafeFloor: Int = 25
+    public static let salinityRange: ClosedRange<Double> = 28.0...40.0
+    public static let optimalSalinityRange: ClosedRange<Double> = 32.0...36.5
+    public static let defaultReefSalinity: Double = 35.0
 
     public static let optimalTempRange: ClosedRange<Int> = 20...26
     public static let optimalHumidityRange: ClosedRange<Int> = 55...75
@@ -132,6 +136,7 @@ public enum TerrariumConfig {
         case .sand: return 24...32
         case .rainforest: return 23...29
         case .aquatic: return 22...28
+        case .reef: return 23...27
         }
     }
 
@@ -141,6 +146,7 @@ public enum TerrariumConfig {
         case .sand: return 25...50
         case .rainforest: return 65...88
         case .aquatic: return 60...98
+        case .reef: return 65...95
         }
     }
     public static let ecoPointMinHumidity: Int = 35
@@ -191,6 +197,7 @@ public enum TerrariumConfig {
         case .sand: return 35
         case .rainforest: return 45
         case .aquatic: return 55
+        case .reef: return 65
         }
     }
 
@@ -211,18 +218,19 @@ public enum TerrariumConfig {
         }
     }
 
-    /// 统一分级图鉴奖励：植物 +2、基础动物 +3、稀有/高阶动物 +5
+    /// 统一分级图鉴奖励：植物/珊瑚 +2、基础动物 +3、稀有/高阶动物 +5
     public static func codexRewardPoints(for entryID: String) -> Int {
         switch entryID {
         case "moss", "clover", "fern", "glow_shroom", "red_shroom", "sundew",
              "succulent", "aloe", "cactus", "lithops", "agave",
              "monstera", "bromeliad", "orchid", "pitcher_plant", "calathea",
-             "marimo", "anubias", "lotus", "vallisneria", "red_ludwigia":
+             "marimo", "anubias", "lotus", "vallisneria", "red_ludwigia",
+             "coral_zoanthid", "coral_acropora", "coral_brain", "coral_anemone", "coral_seafan":
             return 2
         case "rhino_beetle", "tree_frog", "fire_newt", "firefly", "moon_moth", "dragonfly", "luna_cicada",
              "sand_gecko", "scarab", "sand_scorpion", "horned_toad", "antlion_lacewing",
              "hercules_beetle", "chameleon", "dart_frog", "blue_morpho", "red_eyed_frog", "orchid_bee",
-             "betta_fish", "crayfish", "crystal_shrimp":
+             "betta_fish", "crayfish", "crystal_shrimp", "blue_tang", "seahorse":
             return 5
         default:
             return 3
@@ -231,17 +239,17 @@ public enum TerrariumConfig {
 
     public static func hungerRatePerHour(for kind: CritterKind) -> Double {
         switch kind {
-        case .snail, .pillBug, .rhinoBeetle, .leafInsect, .cherryShrimp, .corydoras, .ladybug, .otoCatfish: return 5.0
-        case .treeFrog, .fireNewt, .dartFrog, .redEyedFrog, .amberBeetle, .herculesBeetle, .neonTetra, .desertMantis, .blueMorpho, .crystalShrimp: return 6.0
-        case .sandGecko, .sandScorpion, .hornedToad, .scarab, .chameleon, .bettaFish, .crayfish: return 7.0
+        case .snail, .pillBug, .rhinoBeetle, .leafInsect, .cherryShrimp, .corydoras, .ladybug, .otoCatfish, .starfish, .cleanerShrimp, .hermitCrab: return 5.0
+        case .treeFrog, .fireNewt, .dartFrog, .redEyedFrog, .amberBeetle, .herculesBeetle, .neonTetra, .desertMantis, .blueMorpho, .crystalShrimp, .clownfish, .seahorse: return 6.0
+        case .sandGecko, .sandScorpion, .hornedToad, .scarab, .chameleon, .bettaFish, .crayfish, .blueTang: return 7.0
         }
     }
 
     public static func mealsRequiredToSettle(kind: CritterKind, enabledDecorIDs: [String]) -> Int {
         switch kind {
         case .snail: return enabledDecorIDs.contains("driftwood") ? 1 : 2
-        case .pillBug, .ladybug, .amberBeetle, .scarab, .rhinoBeetle, .leafInsect, .herculesBeetle, .cherryShrimp, .neonTetra, .corydoras, .otoCatfish, .crystalShrimp: return 1
-        case .treeFrog, .fireNewt, .sandGecko, .sandScorpion, .desertMantis, .hornedToad, .chameleon, .dartFrog, .blueMorpho, .redEyedFrog, .bettaFish, .crayfish: return 2
+        case .pillBug, .ladybug, .amberBeetle, .scarab, .rhinoBeetle, .leafInsect, .herculesBeetle, .cherryShrimp, .neonTetra, .corydoras, .otoCatfish, .crystalShrimp, .starfish, .cleanerShrimp, .hermitCrab: return 1
+        case .treeFrog, .fireNewt, .sandGecko, .sandScorpion, .desertMantis, .hornedToad, .chameleon, .dartFrog, .blueMorpho, .redEyedFrog, .bettaFish, .crayfish, .clownfish, .blueTang, .seahorse: return 2
         }
     }
 
@@ -256,6 +264,8 @@ public enum TerrariumConfig {
         case .cherryShrimp, .neonTetra, .corydoras, .otoCatfish, .crystalShrimp: return .aquaticPeaceful
         case .bettaFish: return .aquaticBetta
         case .crayfish: return .aquaticPredator
+        case .clownfish, .starfish, .cleanerShrimp, .blueTang, .hermitCrab: return .reefSymbiosis
+        case .seahorse: return .reefSeahorse
         }
     }
 
@@ -422,6 +432,15 @@ public enum TerrariumConfig {
                 critterSpec(kind: .otoCatfish, biome: .aquatic, cost: 12, group: .aquaticPeaceful, assetName: "char_oto_catfish_sheet", w: 16, h: 12),
                 critterSpec(kind: .crystalShrimp, biome: .aquatic, cost: 20, group: .aquaticPeaceful, assetName: "char_crystal_shrimp_sheet", w: 14, h: 11)
             ]
+        case .reef:
+            return [
+                critterSpec(kind: .clownfish, biome: .reef, cost: 18, group: .reefSymbiosis, assetName: "char_clownfish_sheet", w: 20, h: 16),
+                critterSpec(kind: .starfish, biome: .reef, cost: 12, group: .reefSymbiosis, assetName: "char_starfish_sheet", w: 16, h: 12),
+                critterSpec(kind: .cleanerShrimp, biome: .reef, cost: 14, group: .reefSymbiosis, assetName: "char_cleaner_shrimp_sheet", w: 18, h: 14),
+                critterSpec(kind: .blueTang, biome: .reef, cost: 26, group: .reefSymbiosis, assetName: "char_blue_tang_sheet", w: 22, h: 16),
+                critterSpec(kind: .hermitCrab, biome: .reef, cost: 15, group: .reefSymbiosis, assetName: "char_hermit_crab_sheet", w: 18, h: 15),
+                critterSpec(kind: .seahorse, biome: .reef, cost: 28, group: .reefSeahorse, assetName: "char_seahorse_sheet", w: 14, h: 20)
+            ]
         }
     }
 
@@ -509,7 +528,7 @@ public enum TerrariumConfig {
                 natural = roomTemp + ((atmosphere == .night) ? 0 : 2)
             case .rainforest:
                 natural = roomTemp + 1
-            case .aquatic, .meadow:
+            case .aquatic, .meadow, .reef:
                 natural = roomTemp
             }
         } else {
@@ -520,6 +539,8 @@ public enum TerrariumConfig {
                 natural = (atmosphere == .night) ? 22 : 26
             case .aquatic:
                 natural = 24
+            case .reef:
+                natural = 25
             case .meadow:
                 switch atmosphere {
                 case .night: natural = 19
@@ -537,7 +558,7 @@ public enum TerrariumConfig {
             let heatingFloor: Int = {
                 switch biome {
                 case .sand: return 28
-                case .rainforest: return 26
+                case .rainforest, .reef: return 26
                 case .aquatic, .meadow: return 25
                 }
             }()
@@ -546,7 +567,7 @@ public enum TerrariumConfig {
             let coolingCeiling: Int = {
                 switch biome {
                 case .meadow: return 18
-                case .aquatic: return 22
+                case .aquatic, .reef: return 22
                 case .rainforest: return 23
                 case .sand: return 24
                 }
@@ -650,10 +671,18 @@ public enum TerrariumConfig {
                 decorEntry(id: "aquatic_seiryu_stone", assetName: "env_aquatic_seiryu_stone", biome: .aquatic, cost: 10),
                 decorEntry(id: "aquatic_bamboo_tube", assetName: "env_aquatic_bamboo_tube", biome: .aquatic, cost: 8)
             ]
+        case .reef:
+            return [
+                decorEntry(id: "reef_live_rock", assetName: "env_reef_live_rock", biome: .reef, cost: 14),
+                decorEntry(id: "reef_wavemaker", assetName: "env_reef_wavemaker", biome: .reef, cost: 16),
+                decorEntry(id: "reef_coral_cave", assetName: "env_reef_coral_cave", biome: .reef, cost: 12),
+                decorEntry(id: "reef_giant_clam", assetName: "env_reef_giant_clam", biome: .reef, cost: 18),
+                decorEntry(id: "reef_sand_shells", assetName: "env_reef_sand_shells", biome: .reef, cost: 9)
+            ]
         }
     }
 
-    private static func codexItem(id: String, biome: TerrariumBiome, categoryKey: String, isCritter: Bool = false) -> CodexEntry {
+    private static func codexItem(id: String, biome: TerrariumBiome, categoryKey: String, isCritter: Bool = false, isHiddenReef: Bool = false) -> CodexEntry {
         let name = isCritter ? TerrariumL10n.t("critter.\(id).name") : TerrariumL10n.t("codex.\(id).name")
         return CodexEntry(
             id: id,
@@ -662,8 +691,50 @@ public enum TerrariumConfig {
             category: TerrariumL10n.t("codex.cat.\(categoryKey)"),
             condition: TerrariumL10n.t("codex.\(id).cond"),
             desc: TerrariumL10n.t("codex.\(id).desc"),
-            unlocked: false
+            unlocked: false,
+            isHiddenReef: isHiddenReef
         )
+    }
+
+    /// 31 种基础缸动物/奇遇生物图鉴 ID（25 种可交互动物 + 6 种空中奇遇生物），用于校验隐藏海缸解锁条件
+    public static let baseAnimalCodexIDs: Set<String> = [
+        // 苔原 9
+        "snail", "pill_bug", "ladybug", "rhino_beetle", "tree_frog", "fire_newt", "firefly", "moon_moth", "dragonfly",
+        // 沙地 7
+        "amber_beetle", "desert_mantis", "sand_gecko", "scarab", "sand_scorpion", "horned_toad", "antlion_lacewing",
+        // 雨林 8
+        "leaf_insect", "hercules_beetle", "blue_morpho", "chameleon", "dart_frog", "red_eyed_frog", "luna_cicada", "orchid_bee",
+        // 鱼缸 7
+        "cherry_shrimp", "oto_catfish", "crystal_shrimp", "neon_tetra", "betta_fish", "crayfish", "corydoras"
+    ]
+
+    public struct ReefUnlockProgress: Equatable {
+        public let ownedBaseTankCount: Int
+        public let collectedBaseAnimalCount: Int
+        public let isUnlocked: Bool
+
+        public init(ownedBaseTankCount: Int, collectedBaseAnimalCount: Int, isUnlocked: Bool) {
+            self.ownedBaseTankCount = ownedBaseTankCount
+            self.collectedBaseAnimalCount = collectedBaseAnimalCount
+            self.isUnlocked = isUnlocked
+        }
+    }
+
+    /// 隐藏海缸主线里程碑解锁校验：必须拥有全部 4 种基础缸且集齐 31 种基础动物图鉴
+    public static func reefUnlockProgress(data: TerrariumSaveData) -> ReefUnlockProgress {
+        let baseBiomes: Set<TerrariumBiome> = [.meadow, .sand, .rainforest, .aquatic]
+        let ownedBase = Set(data.containers.map { $0.instance.biome }).intersection(baseBiomes)
+        let unlockedAnimals = Set(data.unlockedCodexIDs).intersection(baseAnimalCodexIDs)
+        let ok = (ownedBase.count == 4 && unlockedAnimals.count == baseAnimalCodexIDs.count)
+        return ReefUnlockProgress(
+            ownedBaseTankCount: ownedBase.count,
+            collectedBaseAnimalCount: unlockedAnimals.count,
+            isUnlocked: ok
+        )
+    }
+
+    public static func isReefUnlocked(data: TerrariumSaveData) -> Bool {
+        reefUnlockProgress(data: data).isUnlocked
     }
 
     // MARK: - 全局生态图鉴（共 52 项）
@@ -724,7 +795,19 @@ public enum TerrariumConfig {
             codexItem(id: "neon_tetra", biome: .aquatic, categoryKey: "aquatic_animal", isCritter: true),
             codexItem(id: "betta_fish", biome: .aquatic, categoryKey: "exclusive", isCritter: true),
             codexItem(id: "crayfish", biome: .aquatic, categoryKey: "aquatic_boss", isCritter: true),
-            codexItem(id: "corydoras", biome: .aquatic, categoryKey: "aquatic_animal", isCritter: true)
+            codexItem(id: "corydoras", biome: .aquatic, categoryKey: "aquatic_animal", isCritter: true),
+            // 隐藏珊瑚礁海缸：珊瑚 (5) & 海洋生物 (6) —— 与 52 基础图鉴解耦
+            codexItem(id: "coral_zoanthid", biome: .reef, categoryKey: "reef_coral", isHiddenReef: true),
+            codexItem(id: "coral_acropora", biome: .reef, categoryKey: "reef_coral", isHiddenReef: true),
+            codexItem(id: "coral_brain", biome: .reef, categoryKey: "reef_rare", isHiddenReef: true),
+            codexItem(id: "coral_anemone", biome: .reef, categoryKey: "reef_coral", isHiddenReef: true),
+            codexItem(id: "coral_seafan", biome: .reef, categoryKey: "reef_rare", isHiddenReef: true),
+            codexItem(id: "clownfish", biome: .reef, categoryKey: "reef_animal", isCritter: true, isHiddenReef: true),
+            codexItem(id: "starfish", biome: .reef, categoryKey: "reef_animal", isCritter: true, isHiddenReef: true),
+            codexItem(id: "cleaner_shrimp", biome: .reef, categoryKey: "reef_animal", isCritter: true, isHiddenReef: true),
+            codexItem(id: "blue_tang", biome: .reef, categoryKey: "reef_rare", isCritter: true, isHiddenReef: true),
+            codexItem(id: "seahorse", biome: .reef, categoryKey: "reef_rare", isCritter: true, isHiddenReef: true),
+            codexItem(id: "hermit_crab", biome: .reef, categoryKey: "reef_animal", isCritter: true, isHiddenReef: true)
         ]
     }
 
@@ -760,6 +843,12 @@ public enum TerrariumConfig {
         case .corydoras: return "翻沙手"
         case .otoCatfish: return "勤劳钳"
         case .crystalShrimp: return "优雅尾"
+        case .clownfish: return "好奇眼"
+        case .starfish: return "慢性子"
+        case .cleanerShrimp: return "勤劳钳"
+        case .blueTang: return "优雅尾"
+        case .seahorse: return "害羞团"
+        case .hermitCrab: return "翻沙手"
         }
     }
 
@@ -822,6 +911,21 @@ public enum TerrariumConfig {
         case .neonTetra, .bettaFish:
             guard enabledDecorIDs.contains("aquatic_bubble_rock") else { return nil }
             let o = effectiveDecorOrigin(for: "aquatic_bubble_rock", decorOrigins: decorOrigins)
+            return GridCoord(col: max(0, o.col - 1), row: o.row + 1)
+        case .clownfish:
+            guard enabledDecorIDs.contains("reef_coral_cave") else { return nil }
+            let o = effectiveDecorOrigin(for: "reef_coral_cave", decorOrigins: decorOrigins)
+            return GridCoord(col: o.col + 1, row: max(0, o.row - 1))
+        case .starfish, .hermitCrab:
+            guard enabledDecorIDs.contains("reef_sand_shells") else { return nil }
+            return effectiveDecorOrigin(for: "reef_sand_shells", decorOrigins: decorOrigins)
+        case .cleanerShrimp:
+            guard enabledDecorIDs.contains("reef_live_rock") else { return nil }
+            let o = effectiveDecorOrigin(for: "reef_live_rock", decorOrigins: decorOrigins)
+            return GridCoord(col: o.col + 1, row: min(gridRows - 1, o.row + 2))
+        case .blueTang, .seahorse:
+            guard enabledDecorIDs.contains("reef_wavemaker") else { return nil }
+            let o = effectiveDecorOrigin(for: "reef_wavemaker", decorOrigins: decorOrigins)
             return GridCoord(col: max(0, o.col - 1), row: o.row + 1)
         }
     }
@@ -911,7 +1015,9 @@ public enum TerrariumConfig {
             achievementDef("ach_aquatic_jewels", "theme", 2),
             achievementDef("ach_first_soulmate", "bond", 2),
             achievementDef("ach_three_soulmates", "bond", 3),
-            achievementDef("ach_skin_collector", "aesthetic", 1)
+            achievementDef("ach_skin_collector", "aesthetic", 1),
+            achievementDef("ach_reef_unlock", "cross_biome", 3),
+            achievementDef("ach_reef_master", "theme", 5)
         ]
     }
 

@@ -195,7 +195,10 @@ final class StageAnimator: ObservableObject {
         switch kind {
         case .neonTetra: return 15.5 + altitudeBias
         case .bettaFish: return 22.5
-        case .corydoras, .otoCatfish: return 1.5
+        case .clownfish: return 14.0
+        case .blueTang: return 22.0
+        case .seahorse: return 12.0
+        case .corydoras, .otoCatfish, .cleanerShrimp: return 1.5
         case .blueMorpho: return 4.0
         default: return 0.0
         }
@@ -206,6 +209,8 @@ final class StageAnimator: ObservableObject {
             switch c.kind {
             case .neonTetra: return 6.5 + c.boidAltitudeBias * 0.4
             case .bettaFish: return 7.5
+            case .clownfish, .seahorse: return 5.0
+            case .blueTang: return 7.5
             default: return 0.0
             }
         }
@@ -218,7 +223,7 @@ final class StageAnimator: ObservableObject {
             case .idle, .patrol, .petted: return 15.5 + c.boidAltitudeBias
             case .sleep: return 6.5
             }
-        case .bettaFish:
+        case .bettaFish, .blueTang:
             switch c.behavior {
             case .seekingFood: return 27.5
             case .eating: return 33.5
@@ -226,7 +231,15 @@ final class StageAnimator: ObservableObject {
             case .idle, .patrol, .petted: return 22.5
             case .sleep: return 7.5
             }
-        case .cherryShrimp, .crystalShrimp:
+        case .clownfish, .seahorse:
+            switch c.behavior {
+            case .seekingFood: return 22.0
+            case .eating: return 32.0
+            case .startle: return 18.0
+            case .idle, .patrol, .petted: return c.kind == .seahorse ? 12.0 : 14.0
+            case .sleep: return 5.0
+            }
+        case .cherryShrimp, .crystalShrimp, .cleanerShrimp:
             switch c.behavior {
             case .eating, .seekingFood, .sleep: return 0.0
             case .startle: return 8.5
@@ -275,13 +288,15 @@ final class StageAnimator: ObservableObject {
         let bobOffset: Double
         if c.behavior == .sleep {
             bobOffset = 0.0
-        } else if c.kind == .neonTetra {
+        } else if c.kind == .neonTetra || c.kind == .clownfish {
             bobOffset = sin(c.swimPhase) * 1.3
-        } else if c.kind == .bettaFish {
+        } else if c.kind == .bettaFish || c.kind == .blueTang {
             bobOffset = cos(c.swimPhase) * 1.6
-        } else if (c.kind == .cherryShrimp || c.kind == .crystalShrimp) && c.smoothBaseGZ > 0.8 {
+        } else if c.kind == .seahorse {
+            bobOffset = sin(c.swimPhase * 0.7) * 1.1
+        } else if (c.kind == .cherryShrimp || c.kind == .crystalShrimp || c.kind == .cleanerShrimp) && c.smoothBaseGZ > 0.8 {
             bobOffset = sin(c.swimPhase * 1.3) * 0.7
-        } else if c.kind == .crayfish {
+        } else if c.kind == .crayfish || c.kind == .starfish || c.kind == .hermitCrab {
             bobOffset = 0.0
         } else if c.kind == .corydoras || c.kind == .otoCatfish {
             bobOffset = sin(c.swimPhase * 0.9) * 0.5
@@ -294,13 +309,15 @@ final class StageAnimator: ObservableObject {
         }
 
         var buoyancyLift = 0.0
-        if (c.kind == .neonTetra || c.kind == .bettaFish),
+        if (c.kind == .neonTetra || c.kind == .bettaFish || c.kind == .clownfish || c.kind == .blueTang),
            c.behavior != .sleep,
-           let state = boundState,
-           state.enabledDecorIDs.contains("aquatic_bubble_rock") {
-            let rock = TerrariumConfig.anchorGridPos(for: "aquatic_bubble_rock", decorOrigins: state.decorOrigins)
-            if hypot(c.gx - rock.gx, c.gy - rock.gy) < 1.65 {
-                buoyancyLift = 2.5
+           let state = boundState {
+            let rockID = state.currentBiome == .reef ? "reef_wavemaker" : "aquatic_bubble_rock"
+            if state.enabledDecorIDs.contains(rockID) {
+                let rock = TerrariumConfig.anchorGridPos(for: rockID, decorOrigins: state.decorOrigins)
+                if hypot(c.gx - rock.gx, c.gy - rock.gy) < 1.65 {
+                    buoyancyLift = 2.5
+                }
             }
         }
 
@@ -402,7 +419,7 @@ final class StageAnimator: ObservableObject {
             let pt = TerrariumConfig.isoToScreen(gx: c.gx, gy: c.gy, gz: c.gz)
 
             switch c.kind {
-            case .cherryShrimp, .corydoras, .otoCatfish, .crystalShrimp:
+            case .cherryShrimp, .corydoras, .otoCatfish, .crystalShrimp, .cleanerShrimp, .clownfish, .blueTang, .seahorse:
                 appendParticle(PixelParticle(
                     x: pt.x, y: pt.y - 4.0, vx: 0, vy: 0,
                     kind: .bubble, life: 180,
@@ -473,9 +490,10 @@ final class StageAnimator: ObservableObject {
             row: max(0, min(TerrariumConfig.gridRows - 1, Int(floor(c.gy))))
         )
 
+        let isWaterTank = (state.currentBiome == .aquatic || state.currentBiome == .reef)
         let feedCoord = TerrariumConfig.feedingCoord(for: state.currentBiome)
-        let isSurfaceFeeder = (c.kind == .neonTetra || c.kind == .bettaFish)
-        let bowlGZ: Double = (state.currentBiome == .aquatic && isSurfaceFeeder) ? TerrariumConfig.waterSurfaceGZ : 3.0
+        let isSurfaceFeeder = (c.kind == .neonTetra || c.kind == .bettaFish || c.kind == .clownfish || c.kind == .blueTang || c.kind == .seahorse)
+        let bowlGZ: Double = (isWaterTank && isSurfaceFeeder) ? TerrariumConfig.waterSurfaceGZ : 3.0
         let bowlCenter = TerrariumConfig.isoToScreen(
             gx: Double(feedCoord.col) + 0.5,
             gy: Double(feedCoord.row) + 0.5,
@@ -499,12 +517,12 @@ final class StageAnimator: ObservableObject {
             }
 
         case .startle:
-            let duration = (c.kind == .snail || c.kind == .pillBug) ? 36 : 18
+            let duration = (c.kind == .snail || c.kind == .pillBug || c.kind == .hermitCrab) ? 36 : 18
             if c.stateTicks >= duration {
                 c.behavior = .idle
                 c.stateTicks = 0
                 c.idleCooldownTicks = 18
-                if c.kind == .cherryShrimp {
+                if c.kind == .cherryShrimp || c.kind == .cleanerShrimp {
                     c.prefersMidwaterSwim = false
                 }
             }
@@ -523,7 +541,7 @@ final class StageAnimator: ObservableObject {
 
             // 进食中途溅出碎屑（水面上层鱼类啄食会从大浮圈掉落缓沉微粒至后方河沙）
             if c.stateTicks == 10 || c.stateTicks == 18 {
-                if state.currentBiome == .aquatic && isSurfaceFeeder {
+                if isWaterTank && isSurfaceFeeder {
                     appendParticle(PixelParticle(
                         x: bowlCenter.x + Double.random(in: -5...5),
                         y: bowlCenter.y + 1,
@@ -666,6 +684,11 @@ final class StageAnimator: ObservableObject {
             case .sandGecko, .blueMorpho: stepRate = 1.0 / 11.0
             case .sandScorpion: stepRate = 1.0 / 14.0
             case .chameleon: stepRate = 1.0 / 18.0
+            case .clownfish, .cleanerShrimp: stepRate = 1.0 / 14.0
+            case .blueTang: stepRate = 1.0 / 12.0
+            case .seahorse: stepRate = 1.0 / 20.0
+            case .hermitCrab: stepRate = 1.0 / 18.0
+            case .starfish: stepRate = 1.0 / 95.0
             }
 
             c.hopProgress = min(1.0, c.hopProgress + stepRate)
@@ -707,7 +730,7 @@ final class StageAnimator: ObservableObject {
                 } else if c.behavior == .patrol && c.path.isEmpty {
                     c.behavior = .idle
                     c.stateTicks = 0
-                    c.idleCooldownTicks = Int.random(in: 24...55)
+                    c.idleCooldownTicks = (c.kind == .starfish) ? Int.random(in: 120...240) : Int.random(in: 24...55)
                     if c.kind == .cherryShrimp {
                         c.prefersMidwaterSwim = false
                     }
@@ -766,12 +789,13 @@ final class StageAnimator: ObservableObject {
     }
 
     private func emitAquaticBubbles(state: TerrariumState) {
-        guard state.currentBiome == .aquatic, !state.isSleeping else { return }
+        let isWaterTank = (state.currentBiome == .aquatic || state.currentBiome == .reef)
+        guard isWaterTank, !state.isSleeping else { return }
 
         // 1. 游鱼低频慢吐气泡（每 3.7 ~ 8.3 秒仅偶发 1 颗极小气珠）
         for idx in critterRuntimes.indices {
             let c = critterRuntimes[idx]
-            let isBubbleEmitterFish = (c.kind == .bettaFish) || (c.kind == .neonTetra && (c.isLeader || c.schoolIndex == 2))
+            let isBubbleEmitterFish = (c.kind == .bettaFish || c.kind == .clownfish || c.kind == .blueTang) || (c.kind == .neonTetra && (c.isLeader || c.schoolIndex == 2))
             guard isBubbleEmitterFish else { continue }
             critterRuntimes[idx].bubbleCooldownTicks -= 1
             if critterRuntimes[idx].bubbleCooldownTicks <= 0 {
@@ -795,12 +819,13 @@ final class StageAnimator: ObservableObject {
             }
         }
 
-        // 2. 冒泡火山石启用的低频缓慢串泡（每 1.3 ~ 2.4 秒 1 颗）
-        if state.enabledDecorIDs.contains("aquatic_bubble_rock") {
+        // 2. 冒泡火山石 / 海缸造浪石泵的低频缓慢串泡（每 1.3 ~ 2.4 秒 1 颗）
+        let ventDecorID = (state.currentBiome == .reef) ? "reef_wavemaker" : "aquatic_bubble_rock"
+        if state.enabledDecorIDs.contains(ventDecorID) {
             rockBubbleCooldownTicks -= 1
             if rockBubbleCooldownTicks <= 0 {
                 rockBubbleCooldownTicks = Int.random(in: 20...36)
-                let origin = TerrariumConfig.effectiveDecorOrigin(for: "aquatic_bubble_rock", decorOrigins: state.decorOrigins)
+                let origin = TerrariumConfig.effectiveDecorOrigin(for: ventDecorID, decorOrigins: state.decorOrigins)
                 let ventGX = Double(origin.col) + 0.95 + Double.random(in: -0.15...0.15)
                 let ventGY = Double(origin.row) + 0.95 + Double.random(in: -0.15...0.15)
                 let startGZ = 9.0
@@ -946,7 +971,8 @@ final class StageAnimator: ObservableObject {
                         .snail, .pillBug, .rhinoBeetle, .herculesBeetle, .leafInsect, .chameleon,
                         .crayfish, .bettaFish, .cherryShrimp, .neonTetra, .fireNewt, .sandScorpion,
                         .dartFrog, .corydoras, .ladybug, .desertMantis, .hornedToad, .blueMorpho,
-                        .redEyedFrog, .otoCatfish, .crystalShrimp
+                        .redEyedFrog, .otoCatfish, .crystalShrimp,
+                        .clownfish, .starfish, .cleanerShrimp, .blueTang, .seahorse, .hermitCrab
                     ]
                     let reactKey: String = {
                         if c.kind == .herculesBeetle { return "critter.rhino_beetle.startle" }
@@ -1084,7 +1110,7 @@ final class StageAnimator: ObservableObject {
 
             switch p.kind {
             case .bubble:
-                if boundState?.currentBiome != .aquatic {
+                if let b = boundState?.currentBiome, (b != .aquatic && b != .reef) {
                     continue
                 }
                 if !p.isPopping {
@@ -1168,7 +1194,7 @@ final class StageAnimator: ObservableObject {
 
     private func stepAerialVisitors(state: TerrariumState) {
         let unlocked = Set(state.unlockedCodexIDs)
-        let isAquatic = (state.currentBiome == .aquatic)
+        let isAquatic = (state.currentBiome == .aquatic || state.currentBiome == .reef)
         let visitWindow = state.isResonanceActive && !state.isSleeping && ((tick % 900) < 320)
 
         var desired: [(kind: AerialVisitorKind, isVisiting: Bool)] = []

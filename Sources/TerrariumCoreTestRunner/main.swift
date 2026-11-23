@@ -504,8 +504,10 @@ runTest("test_persistenceBackupRecovery_andCorruptedIsolation") {
 
 runTest("test_v030_50Codex_frameSkins_andV4Migration") {
     let entries = TerrariumConfig.defaultCodexEntries()
-    check(entries.count == 52, "v0.3.0 图鉴总数应扩充至 52 项，实际=\(entries.count)")
-    check(Set(entries.map { $0.id }).count == 52, "52 项图鉴 ID 不可重复")
+    let baseEntries = entries.filter { !$0.isHiddenReef }
+    let reefEntries = entries.filter { $0.isHiddenReef }
+    check(baseEntries.count == 52 && reefEntries.count == 11 && entries.count == 63, "基础图鉴应保持 52 项、隐藏海缸 11 项，合计 63 项，实际=\(entries.count)")
+    check(Set(entries.map { $0.id }).count == 63, "63 项图鉴 ID 不可重复")
 
     check(TerrariumConfig.codexMilestoneTitle(unlockedCount: 5) == "🔍 探索萌新", "5 项图鉴称号应为探索萌新")
     check(TerrariumConfig.codexMilestoneTitle(unlockedCount: 10) == "🌱 生态学徒", "10 项图鉴称号应为生态学徒")
@@ -514,7 +516,7 @@ runTest("test_v030_50Codex_frameSkins_andV4Migration") {
     check(TerrariumConfig.codexMilestoneTitle(unlockedCount: 42) == "🌟 微境守望者", "42 项图鉴称号应为微境守望者")
     check(TerrariumConfig.codexMilestoneTitle(unlockedCount: 52) == "🏆 全生态宗师", "52 项图鉴称号应为全生态宗师")
 
-    check(TankFrameSkin.allCases.count == 5, "缸体边框皮肤应有 5 款")
+    check(TankFrameSkin.allCases.count == 6, "缸体边框皮肤应有 6 款")
     check(TankFrameSkin.classic.cost == 0 && TankFrameSkin.obsidian.cost > 0, "经典款免费，黑曜石边框应消耗点数")
 
     // 验证新植物与空中访客解锁
@@ -612,8 +614,8 @@ runTest("test_guaranteedFirstPlantSpawn_andDynamicPool") {
 
 runTest("test_achievements_14Titles_andIdempotentRewards") {
     let achs = TerrariumConfig.defaultAchievements
-    check(achs.count == 14, "组合式成就称号总数应为 14 项，实际=\(achs.count)")
-    check(achs.allSatisfy { (1...3).contains($0.rewardPoints) }, "所有成就一次性奖励必须在 1~3 生态点范围内")
+    check(achs.count == 16, "组合式成就称号总数应为 16 项（14 基础 + 2 海缸隐藏），实际=\(achs.count)")
+    check(achs.allSatisfy { (1...5).contains($0.rewardPoints) }, "所有成就一次性奖励必须在 1~5 生态点范围内")
 
     var save = TerrariumSaveData(ecoPoints: 10)
     save.unlockedCodexIDs = ["tree_frog", "dart_frog", "red_eyed_frog", "sand_gecko", "sand_scorpion", "horned_toad"]
@@ -712,20 +714,20 @@ TerrariumL10n.setOverrideTemperatureUnit(.celsius) }
     for lang in SupportedLanguage.allCases {
         TerrariumL10n.setOverrideLanguage(lang)
         let codex = TerrariumConfig.defaultCodexEntries()
-        check(codex.count == 52, "\(lang.rawValue) 图鉴应保持 52 项")
+        check(codex.filter { !$0.isHiddenReef }.count == 52 && codex.filter { $0.isHiddenReef }.count == 11, "\(lang.rawValue) 图鉴应保持 52 基础 + 11 隐藏")
         for entry in codex {
             check(!entry.name.contains("{") && !entry.name.hasPrefix("codex.") && !entry.name.hasPrefix("critter."), "\(lang.rawValue) 图鉴名未翻译: \(entry.id)")
             check(!entry.category.contains("{") && !entry.condition.contains("{") && !entry.desc.contains("{"), "\(lang.rawValue) 图鉴存在未替换占位符: \(entry.id)")
         }
 
         let allDecor = TerrariumBiome.allCases.flatMap { TerrariumConfig.decorCatalog(for: $0) }
-        check(allDecor.count == 20, "\(lang.rawValue) 造景目录应保持 20 项")
+        check(allDecor.count == 25, "\(lang.rawValue) 造景目录应保持 25 项")
         for d in allDecor {
             check(!d.name.hasPrefix("decor.") && !d.nicheDescription.contains("{"), "\(lang.rawValue) 造景异常: \(d.id)")
         }
 
         let allCritters = TerrariumBiome.allCases.flatMap { TerrariumConfig.critterShopCatalog(for: $0) }
-        check(allCritters.count == 25, "\(lang.rawValue) 生物商店目录应保持 25 项")
+        check(allCritters.count == 31, "\(lang.rawValue) 生物商店目录应保持 31 项")
         let emptyMeadow = TerrariumInstanceState.empty(biome: .meadow)
         for c in allCritters {
             check(!c.name.hasPrefix("critter.") && !c.unlockConditionText.contains("{") && !c.foodChainNote.contains("{"), "\(lang.rawValue) 生物目录异常: \(c.id)")
@@ -734,7 +736,7 @@ TerrariumL10n.setOverrideTemperatureUnit(.celsius) }
         }
 
         let achs = TerrariumConfig.defaultAchievements
-        check(achs.count == 14, "\(lang.rawValue) 成就应保持 14 项")
+        check(achs.count == 16, "\(lang.rawValue) 成就应保持 16 项")
         for a in achs {
             check(!a.title.hasPrefix("ach.") && !a.conditionDesc.contains("{"), "\(lang.rawValue) 成就异常: \(a.id)")
         }
@@ -854,6 +856,99 @@ runTest("test_plantWiltingByBiome_andTemperatureUnitConversion") {
     }
     check(TerrariumL10n.dailyTip(for: .meadow, index: 10).contains("72°F"), "华氏模式下第 11 条小贴士中的 22°C 示例应自动换算为 72°F")
     check(TerrariumL10n.t("tips.alert.sand_wet").contains("加热灯") && TerrariumL10n.t("tips.alert.sand_wet").contains("蒸发"), "沙地过湿预警贴士应与物理引擎一致，提示开启加热灯加速蒸发")
+}
+
+runTest("test_hiddenReefBiome_unlockSalinityCoralAndMarineCritters") {
+    defer {
+        TerrariumL10n.setOverrideLanguage(.zhHans)
+    }
+
+    // 1. 隐藏海缸解锁门禁：必须同时拥有 4 种基础缸且基础 31 种动物图鉴全收集
+    var save = TerrariumSaveData()
+    check(!TerrariumConfig.isReefUnlocked(data: save), "仅 1 个基础缸时海缸应处于锁定状态")
+    save.containers = [
+        TerrariumContainer(customName: "苔原", instance: .empty(biome: .meadow)),
+        TerrariumContainer(customName: "沙地", instance: .empty(biome: .sand)),
+        TerrariumContainer(customName: "雨林", instance: .empty(biome: .rainforest)),
+        TerrariumContainer(customName: "水域", instance: .empty(biome: .aquatic))
+    ]
+    check(!TerrariumConfig.isReefUnlocked(data: save), "拥有 4 种基础缸但未集齐 31 种动物时海缸仍应锁定")
+
+    let allBaseAnimals = Array(TerrariumConfig.baseAnimalCodexIDs)
+    save.unlockedCodexIDs = Array(allBaseAnimals.dropLast())
+    check(!TerrariumConfig.isReefUnlocked(data: save), "差 1 种基础动物时海缸仍应锁定 (30/31)")
+
+    save.unlockedCodexIDs = allBaseAnimals
+    let progress = TerrariumConfig.reefUnlockProgress(data: save)
+    check(progress.isUnlocked && progress.ownedBaseTankCount == 4 && progress.collectedBaseAnimalCount == 31, "拥有 4 种基础缸且集齐 31 种动物后应解锁隐藏海缸")
+
+    // 2. 52 项基础全生态宗师成就与 11 项隐藏图鉴解耦
+    check(TerrariumConfig.baseAnimalCodexIDs.count == 31, "基础动物图鉴 ID 集合应恰好为 31 项")
+    var achSave = TerrariumSaveData()
+    achSave.unlockedCodexIDs = TerrariumConfig.defaultCodexEntries().filter { $0.isHiddenReef }.map { $0.id }
+    TerrariumSimulation.evaluateAchievements(data: &achSave)
+    check(!achSave.unlockedAchievementIDs.contains("ach_codex_10"), "隐藏海缸图鉴不应计入基础 52 项里程碑成就")
+    check(achSave.unlockedAchievementIDs.contains("ach_reef_master"), "集齐 11 项隐藏海域物种应解锁 ach_reef_master")
+
+    // 3. 海缸盐度蒸发浓缩与珊瑚失衡白化/恢复
+    var reef = TerrariumInstanceState.empty(biome: .reef)
+    check(reef.salinity == 35.0, "海缸初始盐度应为 35.0‰")
+    reef.plants = [PlantInstance(speciesID: "coral_zoanthid", coord: GridCoord(col: 3, row: 3), stage: .mature)]
+    var reefPts = 0
+    var reefCodex: [String] = []
+    TerrariumSimulation.advanceInstance(instance: &reef, ecoPoints: &reefPts, unlockedCodexIDs: &reefCodex, elapsedSeconds: 3600, allowRandomSpawn: false)
+    check((reef.salinity ?? 35.0) > 35.2, "海缸经过 1 小时水分蒸发后盐度应缓慢浓缩上升，实际=\(reef.salinity ?? 0)")
+
+    reef.salinity = 38.5
+    TerrariumSimulation.updatePlants(instance: &reef, dt: 7500)
+    check(reef.plants[0].stage == .wilting, "海缸盐度过高(38.5‰)应触发珊瑚白化缩触手 (.wilting)")
+    check(PlantStage.wilting.localizedName(for: .reef, salinity: reef.salinity) == "盐度过浓", "盐度过高时应显示'盐度过浓'")
+
+    reef.salinity = 34.5
+    reef.humidity = 75
+    TerrariumSimulation.updatePlants(instance: &reef, dt: 300)
+    check(reef.plants[0].stage == .mature || reef.plants[0].stage == .lushDew, "盐度恢复适宜后珊瑚应重新舒展")
+
+    // 4. 海星降低藻垢 & 海马与共生群互斥
+    reef.glassFogLevel = 0.5
+    reef.enabledDecorIDs = ["reef_sand_shells", "reef_live_rock"]
+    reef.critters = [
+        CritterPersistentState(kind: .starfish, residency: .resident, coord: GridCoord(col: 4, row: 4)),
+        CritterPersistentState(kind: .clownfish, residency: .resident, coord: GridCoord(col: 5, row: 5)),
+        CritterPersistentState(kind: .seahorse, residency: .resident, coord: GridCoord(col: 6, row: 6))
+    ]
+    let moved = TerrariumSimulation.normalizeFoodChainCompatibility(instance: &reef)
+    check(!moved.isEmpty, "幽蓝海马与珊瑚礁共生群互斥时应自动收纳冲突生物")
+    check(!TerrariumConfig.areCompatibleInSameTank(.clownfish, .seahorse), "小丑鱼与海马应属于不同食物链群落")
+    check(TerrariumConfig.areCompatibleInSameTank(.hermitCrab, .starfish), "寄居蟹与海星应属于同一礁石共生群")
+
+    // 5. v5 存档兼容解码（无 salinity 字段）
+    let v5ReefJSON = """
+    {
+      "biome": "珊瑚礁海缸",
+      "atmosphere": "日间森林",
+      "temperature": 25,
+      "humidity": 72,
+      "isSleeping": false,
+      "foodBowlPortions": 1,
+      "glassFogLevel": 0.0,
+      "mistDewBoostSeconds": 0.0,
+      "plants": [],
+      "critters": [],
+      "unlockedDecorIDs": [],
+      "enabledDecorIDs": [],
+      "nextWeatherEventAt": 100,
+      "weatherCooldownEndAt": 0,
+      "accumulatedEcoSeconds": 0,
+      "accumulatedHumidityDecaySeconds": 0,
+      "ambientRelaxSeconds": 0,
+      "plantPulseSeconds": 0
+    }
+    """
+    let dec = JSONDecoder()
+    dec.dateDecodingStrategy = .secondsSince1970
+    let decodedReef = try? dec.decode(TerrariumInstanceState.self, from: Data(v5ReefJSON.utf8))
+    check(decodedReef?.salinity == 35.0, "缺失 salinity 字段的旧版海缸存档应安全兜底为 35.0‰")
 }
 
 print("\nSummary: \(passedCount) passed, \(failedCount) failed.")

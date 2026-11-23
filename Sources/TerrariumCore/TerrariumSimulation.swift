@@ -27,7 +27,12 @@ public enum TerrariumSimulation {
         min(TerrariumConfig.humidityRange.upperBound, max(TerrariumConfig.humidityRange.lowerBound, value))
     }
 
-    public static func isOptimalEnvironment(temperature: Int, humidity: Int, biome: TerrariumBiome) -> Bool {
+    public static func clampSalinity(_ v: Double) -> Double {
+        let clamped = min(TerrariumConfig.salinityRange.upperBound, max(TerrariumConfig.salinityRange.lowerBound, v))
+        return (clamped * 10.0).rounded() / 10.0
+    }
+
+    public static func isOptimalEnvironment(temperature: Int, humidity: Int, biome: TerrariumBiome, salinity: Double? = nil) -> Bool {
         switch biome {
         case .sand:
             return (24...32).contains(temperature) && (25...50).contains(humidity)
@@ -35,6 +40,9 @@ public enum TerrariumSimulation {
             return (23...29).contains(temperature) && (65...88).contains(humidity)
         case .aquatic:
             return (22...28).contains(temperature) && humidity >= 60
+        case .reef:
+            let sal = salinity ?? TerrariumConfig.defaultReefSalinity
+            return (23...27).contains(temperature) && humidity >= 65 && TerrariumConfig.optimalSalinityRange.contains(sal)
         case .meadow:
             return TerrariumConfig.optimalTempRange.contains(temperature)
                 && TerrariumConfig.optimalHumidityRange.contains(humidity)
@@ -66,7 +74,8 @@ public enum TerrariumSimulation {
             "fern", "clover", "sundew",
             "monstera", "bromeliad", "orchid", "pitcher_plant", "calathea",
             "marimo", "anubias", "lotus", "vallisneria", "red_ludwigia",
-            "agave"
+            "agave",
+            "coral_zoanthid", "coral_acropora", "coral_brain", "coral_anemone", "coral_seafan"
         ]
         for p in instance.plants where p.stage != .withered {
             if lightFlora.contains(p.speciesID) { floraReduction += 0.03 }
@@ -88,12 +97,17 @@ public enum TerrariumSimulation {
             }
         } else if instance.biome == .aquatic && instance.enabledDecorIDs.contains("aquatic_bubble_rock") {
             decorReduction += 0.30
+        } else if instance.biome == .reef && instance.enabledDecorIDs.contains("reef_wavemaker") {
+            decorReduction += 0.25
         }
         let retention = max(0.40, 1.0 - floraReduction - decorReduction)
         return TerrariumConfig.baseEvaporationPerHour * tempFactor * biomeFactor * thermalEvapFactor * retention
     }
 
     public static func computeDewLevel(speciesID: String, humidity: Int, mistDewBoostSeconds: TimeInterval) -> Int {
+        if speciesID.hasPrefix("coral_") {
+            return humidity >= 72 ? (mistDewBoostSeconds > 0 ? 2 : 1) : 0
+        }
         guard speciesID != "succulent", speciesID != "cactus", speciesID != "aloe",
               speciesID != "lithops", speciesID != "agave",
               speciesID != "marimo", speciesID != "anubias", speciesID != "lotus",
@@ -208,6 +222,14 @@ public enum TerrariumSimulation {
                 // 碧波鱼缸：每 ~2 小时才逐渐生满薄藻垢；摆放青龙造景石组可减缓 20% 藻类滋生
                 let algaeSlowdown = instance.enabledDecorIDs.contains("aquatic_seiryu_stone") ? 0.80 : 1.0
                 instance.glassFogLevel = min(1.0, instance.glassFogLevel + (dt * algaeSlowdown) / TerrariumConfig.aquaticAlgaeAccumulationSeconds)
+            } else if instance.biome == .reef {
+                // 海缸藻垢：海星贴底爬行可减缓并缓慢清理藻垢
+                let hasStarfish = instance.critters.contains { $0.kind == .starfish && ($0.residency == .resident || $0.residency == .visitor) }
+                let algaeSlowdown = hasStarfish ? 0.45 : 0.85
+                instance.glassFogLevel = min(1.0, instance.glassFogLevel + (dt * algaeSlowdown) / TerrariumConfig.aquaticAlgaeAccumulationSeconds)
+                if hasStarfish && instance.glassFogLevel > 0.05 {
+                    instance.glassFogLevel = max(0.0, instance.glassFogLevel - dt / 14400.0)
+                }
             } else if instance.humidity >= TerrariumConfig.dewLightHumidityThreshold {
                 // 陆生缸：高湿状态下按 ~45 分钟缓慢起雾（~30-60 分钟清理一次）
                 let targetFog = min(1.0, Double(instance.humidity - 70) / 28.0)
@@ -228,6 +250,14 @@ public enum TerrariumSimulation {
                 if instance.humidity > TerrariumConfig.humiditySafeFloor {
                     instance.humidity = max(TerrariumConfig.humiditySafeFloor, instance.humidity - decaySteps)
                 }
+            }
+            if instance.biome == .reef {
+                // B2. 海缸水分蒸发浓缩：盐度缓慢上升（+0.30‰/h），加热或高温加速；活石拱门减缓 30% 波动
+                let baseSal = instance.salinity ?? TerrariumConfig.defaultReefSalinity
+                let heatMult = (instance.thermalMode == .heating || instance.temperature >= 28) ? 1.35 : 1.0
+                let rockMult = instance.enabledDecorIDs.contains("reef_live_rock") ? 0.70 : 1.0
+                let salDelta = 0.30 * heatMult * rockMult * (dt / 3600.0)
+                instance.salinity = min(TerrariumConfig.salinityRange.upperBound, baseSal + salDelta)
             }
 
             // C. 环境基线温度负反馈回归（联动本地实际气温 + 加热灯/降温扇设备恒温目标）
@@ -258,10 +288,11 @@ public enum TerrariumSimulation {
             let hasActiveCritters = instance.critters.contains(where: { $0.residency == .resident || $0.residency == .visitor })
             let hasLife = hasLiveFlora || hasActiveCritters
             if hasLife && instance.humidity >= minHum {
-                let baseInterval = isOptimalEnvironment(temperature: instance.temperature, humidity: instance.humidity, biome: instance.biome)
+                let baseInterval = isOptimalEnvironment(temperature: instance.temperature, humidity: instance.humidity, biome: instance.biome, salinity: instance.salinity)
                     ? TerrariumConfig.ecoPointOptimalIntervalSeconds
                     : TerrariumConfig.ecoPointBaseIntervalSeconds
-                let ecoBoost = tankEcoSpeedBoost(for: instance.critters)
+                let clamBonus = (instance.biome == .reef && instance.enabledDecorIDs.contains("reef_giant_clam")) ? 0.10 : 0.0
+                let ecoBoost = tankEcoSpeedBoost(for: instance.critters) + clamBonus
                 let baseSlotEff = TerrariumConfig.tankEfficiencyMultiplier(slotIndex: tankSlotIndex)
                 let slotEfficiency = min(1.0, baseSlotEff + resonanceEfficiencyBonus)
                 let interval = baseInterval / max(0.35, slotEfficiency * (1.0 + ecoBoost))
@@ -300,10 +331,14 @@ public enum TerrariumSimulation {
                 }
             }
 
-            // F. 在缸动物饥饿累积与离线代偿进食（严禁生物仓 .stored 偷吃；计入好感度减饥饿特技）
+            // F. 在缸动物饥饿累积与离线代偿进食（严禁生物仓 .stored 偷吃；计入好感度减饥饿特技与清洁虾护理）
+            let hasCleanerShrimp = (instance.biome == .reef) && instance.critters.contains {
+                $0.kind == .cleanerShrimp && ($0.residency == .resident || $0.residency == .visitor)
+            }
+            let reefCleanerMult = hasCleanerShrimp ? 0.85 : 1.0
             for idx in instance.critters.indices where (instance.critters[idx].residency == .resident || instance.critters[idx].residency == .visitor) {
                 let kind = instance.critters[idx].kind
-                let hungerMult = critterHungerMultiplier(for: instance.critters[idx])
+                let hungerMult = critterHungerMultiplier(for: instance.critters[idx]) * reefCleanerMult
                 let rate = TerrariumConfig.hungerRatePerHour(for: kind) * hungerMult
                 instance.critters[idx].hunger = min(100.0, instance.critters[idx].hunger + rate * (dt / 3600.0))
 
@@ -550,6 +585,41 @@ public enum TerrariumSimulation {
             if ludCount < 1 { return needPlant("red_ludwigia") }
             if instance.humidity < 72 { return (false, TerrariumL10n.t("elig.need_oxygen_min", ["val": "72"])) }
             return eligOK()
+        case .clownfish:
+            guard instance.biome == .reef else { return onlyBiome(.reef) }
+            let hasAnemone = instance.plants.contains { $0.speciesID == "coral_anemone" && $0.stage != .withered }
+            if !hasAnemone && !instance.enabledDecorIDs.contains("reef_live_rock") {
+                return needDecor("reef_live_rock")
+            }
+            return eligOK()
+        case .starfish:
+            guard instance.biome == .reef else { return onlyBiome(.reef) }
+            if !instance.enabledDecorIDs.contains("reef_sand_shells") && !instance.enabledDecorIDs.contains("reef_live_rock") {
+                return needDecor("reef_sand_shells")
+            }
+            if instance.humidity < 60 { return (false, TerrariumL10n.t("elig.need_oxygen_min", ["val": "60"])) }
+            return eligOK()
+        case .cleanerShrimp:
+            guard instance.biome == .reef else { return onlyBiome(.reef) }
+            if !instance.enabledDecorIDs.contains("reef_live_rock") { return needDecor("reef_live_rock") }
+            return eligOK()
+        case .blueTang:
+            guard instance.biome == .reef else { return onlyBiome(.reef) }
+            if !instance.enabledDecorIDs.contains("reef_wavemaker") { return needDecor("reef_wavemaker") }
+            if !instance.enabledDecorIDs.contains("reef_live_rock") { return needDecor("reef_live_rock") }
+            if instance.humidity < 75 { return (false, TerrariumL10n.t("elig.need_oxygen_min", ["val": "75"])) }
+            return eligOK()
+        case .seahorse:
+            guard instance.biome == .reef else { return onlyBiome(.reef) }
+            let seafanCount = instance.plants.filter { $0.speciesID == "coral_seafan" && $0.stage != .withered }.count
+            if seafanCount < 1 { return needPlant("coral_seafan") }
+            return eligOK()
+        case .hermitCrab:
+            guard instance.biome == .reef else { return onlyBiome(.reef) }
+            if !instance.enabledDecorIDs.contains("reef_sand_shells") && !instance.enabledDecorIDs.contains("reef_coral_cave") {
+                return needDecor("reef_sand_shells")
+            }
+            return eligOK()
         }
     }
 
@@ -730,11 +800,16 @@ public enum TerrariumSimulation {
             let isAquaticPlant = (!isDesertPlant && !isRainforestPlant && (instance.biome == .aquatic
                 || p.speciesID == "marimo" || p.speciesID == "anubias" || p.speciesID == "lotus"
                 || p.speciesID == "vallisneria" || p.speciesID == "red_ludwigia"))
+            let isReefCoral = (!isDesertPlant && !isRainforestPlant && !isAquaticPlant && (instance.biome == .reef
+                || p.speciesID.hasPrefix("coral_")))
             let isUnhealthy: Bool
             if isDesertPlant {
                 isUnhealthy = (instance.humidity >= 80)
             } else if isRainforestPlant {
                 isUnhealthy = (instance.humidity < 45)
+            } else if isReefCoral {
+                let sal = instance.salinity ?? TerrariumConfig.defaultReefSalinity
+                isUnhealthy = (instance.humidity < 45 || !TerrariumConfig.optimalSalinityRange.contains(sal))
             } else if isAquaticPlant {
                 isUnhealthy = (instance.humidity < 40)
             } else {
@@ -899,6 +974,28 @@ public enum TerrariumSimulation {
             if anubiasCount >= 1 && instance.temperature >= 23 && instance.humidity >= 70 {
                 candidates.append(PlantCandidate(speciesID: "red_ludwigia", count: countOf("red_ludwigia"), cap: 2, weight: 0.8, baseProb: 0.22))
             }
+
+        case .reef:
+            hasWoodBoost = instance.enabledDecorIDs.contains("reef_live_rock")
+            let zoaCount = countOf("coral_zoanthid")
+            let sal = instance.salinity ?? TerrariumConfig.defaultReefSalinity
+            let isSalIdeal = (32.5...36.0).contains(sal)
+
+            if instance.humidity >= 55 && (31.0...38.0).contains(sal) {
+                candidates.append(PlantCandidate(speciesID: "coral_zoanthid", count: zoaCount, cap: TerrariumConfig.maxPlantsCap, weight: 1.4, baseProb: 0.24))
+            }
+            if instance.enabledDecorIDs.contains("reef_live_rock") && isSalIdeal && instance.humidity >= 75 {
+                candidates.append(PlantCandidate(speciesID: "coral_acropora", count: countOf("coral_acropora"), cap: 3, weight: 1.0, baseProb: 0.26))
+            }
+            if zoaCount >= 1 && (24...27).contains(instance.temperature) {
+                candidates.append(PlantCandidate(speciesID: "coral_brain", count: countOf("coral_brain"), cap: 2, weight: 0.9, baseProb: 0.24))
+            }
+            if zoaCount >= 1 && instance.humidity >= 70 {
+                candidates.append(PlantCandidate(speciesID: "coral_anemone", count: countOf("coral_anemone"), cap: 2, weight: 0.95, baseProb: 0.26))
+            }
+            if instance.enabledDecorIDs.contains("reef_wavemaker") && isSalIdeal {
+                candidates.append(PlantCandidate(speciesID: "coral_seafan", count: countOf("coral_seafan"), cap: 2, weight: 0.85, baseProb: 0.24))
+            }
         }
 
         guard !candidates.isEmpty else { return nil }
@@ -945,6 +1042,10 @@ public enum TerrariumSimulation {
             }
         case .aquatic:
             if instance.enabledDecorIDs.contains("aquatic_bamboo_tube") {
+                extraSpawnMult = 1.20
+            }
+        case .reef:
+            if instance.enabledDecorIDs.contains("reef_giant_clam") {
                 extraSpawnMult = 1.20
             }
         }
@@ -1064,12 +1165,16 @@ public enum TerrariumSimulation {
             newlyUnlocked.append(def)
         }
 
-        check("ach_codex_10", codex.count >= 10)
-        check("ach_codex_20", codex.count >= 20)
-        check("ach_codex_33", codex.count >= 33)
-        check("ach_codex_42", codex.count >= 42)
-        check("ach_codex_52", codex.count >= 52)
-        check("ach_four_biomes", biomes.count >= TerrariumBiome.allCases.count)
+        let baseCodexIDs = Set(TerrariumConfig.defaultCodexEntries().filter { !$0.isHiddenReef }.map { $0.id })
+        let baseCodexCount = codex.intersection(baseCodexIDs).count
+        let hiddenReefIDs = Set(TerrariumConfig.defaultCodexEntries().filter { $0.isHiddenReef }.map { $0.id })
+
+        check("ach_codex_10", baseCodexCount >= 10)
+        check("ach_codex_20", baseCodexCount >= 20)
+        check("ach_codex_33", baseCodexCount >= 33)
+        check("ach_codex_42", baseCodexCount >= 42)
+        check("ach_codex_52", baseCodexCount >= 52)
+        check("ach_four_biomes", Set([TerrariumBiome.meadow, .sand, .rainforest, .aquatic]).isSubset(of: biomes))
         check("ach_aerial_collector", Set(["firefly", "moon_moth", "dragonfly", "luna_cicada", "antlion_lacewing", "orchid_bee"]).isSubset(of: codex))
         check("ach_frog_chorus", Set(["tree_frog", "dart_frog", "red_eyed_frog"]).isSubset(of: codex))
         check("ach_desert_lords", Set(["sand_gecko", "sand_scorpion", "horned_toad"]).isSubset(of: codex))
@@ -1078,6 +1183,8 @@ public enum TerrariumSimulation {
         check("ach_first_soulmate", soulmateCount >= 1)
         check("ach_three_soulmates", soulmateCount >= 3)
         check("ach_skin_collector", data.unlockedFrameSkinIDs.count >= 3)
+        check("ach_reef_unlock", biomes.contains(.reef))
+        check("ach_reef_master", !hiddenReefIDs.isEmpty && hiddenReefIDs.isSubset(of: codex))
 
         return newlyUnlocked
     }

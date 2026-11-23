@@ -74,7 +74,7 @@ struct PixelStageView: View {
             // 将加热棒/晒背夹灯/静音降温扇实体本体绘于后壁玻璃之前方、游鱼与水体图层之后方，彻底消除遮挡游鱼与水草问题
             if state.hasHeatLamp {
                 let isHeatingOn = (!state.isSleeping && state.thermalMode == .heating)
-                if state.currentBiome == .aquatic {
+                if state.currentBiome == .aquatic || state.currentBiome == .reef {
                     drawSheetFrame(
                         in: &context,
                         sheet: "equip_aquarium_heater",
@@ -118,6 +118,7 @@ struct PixelStageView: View {
             case (.rainforest, true): terrainAsset = "terrain_rainforest_wet"
             case (.rainforest, false): terrainAsset = "terrain_rainforest_dry"
             case (.aquatic, _): terrainAsset = (state.humidity >= 55) ? "terrain_aquatic_clean" : "terrain_aquatic_murky"
+            case (.reef, _): terrainAsset = (state.humidity >= 55) ? "terrain_reef_clean" : "terrain_reef_murky"
             }
             drawFullImage(terrainAsset)
 
@@ -283,16 +284,16 @@ struct PixelStageView: View {
                     shadowCtx.fill(Path(ellipseIn: rect), with: .color(Color.black.opacity(0.26 * liftFade)))
                 }
 
-                for decor in state.decorItems where decor.enabled && decor.id != "shallow_pool" && decor.id != "sand_pebbles" && decor.id != "meadow_stepping_stones" {
+                for decor in state.decorItems where decor.enabled && decor.id != "shallow_pool" && decor.id != "sand_pebbles" && decor.id != "meadow_stepping_stones" && decor.id != "reef_sand_shells" {
                     let gp = TerrariumConfig.anchorGridPos(for: decor.id, decorOrigins: state.decorOrigins)
                     let pt = TerrariumConfig.isoToScreen(gx: gp.gx, gy: gp.gy)
                     let dims: (Double, Double) = {
                         switch decor.id {
                         case "sand_rock": return (42, 19)
-                        case "driftwood", "sand_wood", "rainforest_vine", "aquatic_driftwood": return (44, 18)
-                        case "rainforest_waterfall", "aquatic_bubble_rock": return (38, 16)
-                        case "boulder", "rainforest_bark", "aquatic_castle": return (28, 13)
-                        case "sand_rib_arch", "rainforest_slate_ledge", "aquatic_seiryu_stone": return (24, 11)
+                        case "driftwood", "sand_wood", "rainforest_vine", "aquatic_driftwood", "reef_live_rock": return (44, 18)
+                        case "rainforest_waterfall", "aquatic_bubble_rock", "reef_wavemaker": return (38, 16)
+                        case "boulder", "rainforest_bark", "aquatic_castle", "reef_coral_cave": return (28, 13)
+                        case "sand_rib_arch", "rainforest_slate_ledge", "aquatic_seiryu_stone", "reef_giant_clam": return (24, 11)
                         default: return (18, 8)
                         }
                     }()
@@ -303,7 +304,7 @@ struct PixelStageView: View {
                     gx: Double(TerrariumConfig.foodBowlCoord.col) + 0.5,
                     gy: Double(TerrariumConfig.foodBowlCoord.row) + 0.5
                 )
-                if state.currentBiome != .aquatic {
+                if state.currentBiome != .aquatic && state.currentBiome != .reef {
                     drawClippedShadow(center: bowlPt, width: 16, height: 7)
                 }
 
@@ -425,13 +426,27 @@ struct PixelStageView: View {
                     appendSlicedDecor(sheet: "env_aquatic_seiryu_stone", frameSize: CGSize(width: 30, height: 26), anchor: CGPoint(x: 15, y: 20), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
                 case "aquatic_bamboo_tube":
                     appendSlicedDecor(sheet: "env_aquatic_bamboo_tube", frameSize: CGSize(width: 32, height: 28), anchor: CGPoint(x: 16, y: 23), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                case "reef_live_rock":
+                    appendSlicedDecor(sheet: "env_reef_live_rock", frameSize: CGSize(width: 56, height: 38), anchor: CGPoint(x: 28, y: 27), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                case "reef_wavemaker":
+                    appendSlicedDecor(sheet: "env_reef_wavemaker", frameSize: CGSize(width: 40, height: 32), anchor: CGPoint(x: 20, y: 23), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                case "reef_coral_cave":
+                    appendSlicedDecor(sheet: "env_reef_coral_cave", frameSize: CGSize(width: 44, height: 32), anchor: CGPoint(x: 22, y: 24), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                case "reef_giant_clam":
+                    appendSlicedDecor(sheet: "env_reef_giant_clam", frameSize: CGSize(width: 32, height: 22), anchor: CGPoint(x: 16, y: 16), screenPos: screenPos, colStart: colStart, colEnd: colEnd, baseGY: baseGY)
+                case "reef_sand_shells":
+                    let sandPos = TerrariumConfig.isoToScreen(gx: gp.gx, gy: gp.gy)
+                    let sandDepth = (gp.gx + gp.gy) * 1000.0 - 400.0
+                    sortables.append(RenderSortable(sortDepth: sandDepth) { ctx in
+                        drawSheetFrame(in: &ctx, sheet: "env_reef_sand_shells", frameIndex: 0, frameSize: CGSize(width: 28, height: 16), screenPos: sandPos, anchor: CGPoint(x: 14, y: 8))
+                    })
                 default:
                     break
                 }
             }
 
-            // 4b. 陆生固定食盆（恒定处于视觉最前沿净空区；碧波鱼缸改为水面悬浮喂食圈在 Pass 6b 绘制）
-            if state.currentBiome != .aquatic {
+            // 4b. 陆生固定食盆（恒定处于视觉最前沿净空区；碧波鱼缸与海缸改为水面悬浮喂食圈在 Pass 6b 绘制）
+            if state.currentBiome != .aquatic && state.currentBiome != .reef {
                 let bowlDepth = (Double(TerrariumConfig.foodBowlCoord.col) + 0.5 + Double(TerrariumConfig.foodBowlCoord.row) + 0.5) * 1000.0 + 1.0
                 sortables.append(RenderSortable(sortDepth: bowlDepth) { ctx in
                     let bowlFrame: Int
@@ -517,6 +532,12 @@ struct PixelStageView: View {
                     case "red_ludwigia":
                         let fIdx = isSprout ? 2 : (isWilting ? 3 : (state.isSleeping ? 0 : ((animator.tick / 10 + idx + phaseShift) % 2)))
                         drawSheetFrame(in: &ctx, sheet: "plant_red_ludwigia_sheet", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 20), screenPos: screenPos, anchor: CGPoint(x: 10, y: 16), flippedX: flipPlant)
+                    case "coral_zoanthid", "coral_acropora", "coral_brain", "coral_anemone", "coral_seafan":
+                        let isFluoro = (plant.dewLevel > 0 || state.atmosphere == .night)
+                        let swayPhase = state.isSleeping ? 0 : ((animator.tick / 7 + idx + phaseShift) % 2)
+                        let fIdx = isSprout ? 4 : (isWilting ? 5 : ((isFluoro ? 2 : 0) + swayPhase))
+                        let sheetName = "plant_\(plant.speciesID)_sheet"
+                        drawSheetFrame(in: &ctx, sheet: sheetName, frameIndex: fIdx, frameSize: CGSize(width: 22, height: 22), screenPos: screenPos, anchor: CGPoint(x: 11, y: 19), flippedX: flipPlant)
                     case "lotus":
                         // 仅在幼苗期绘制半透明水下细芽茎；成熟期与枯萎期不再保留水下茎与根部，保持水体通透美观
                         if isSprout {
@@ -531,7 +552,7 @@ struct PixelStageView: View {
                     }
 
                     // 湿度视觉反馈：幼苗期尚未长成叶冠不显示高处凝露滴落动画，仅成熟大植株显示
-                    if plant.speciesID != "lotus", !isSprout, plant.dewLevel >= 1 && !isWilting {
+                    if plant.speciesID != "lotus", !plant.speciesID.hasPrefix("coral_"), !isSprout, plant.dewLevel >= 1 && !isWilting {
                         let dewOffsetY: Double = (plant.speciesID == "fern" || plant.speciesID == "monstera") ? -15.0 : -6.0
                         if plant.dewLevel == 2 && !state.isSleeping {
                             let dropPhase = (animator.tick + idx * 59) % 210
@@ -574,7 +595,7 @@ struct PixelStageView: View {
                         schoolIndex: 0,
                         gx: Double(c.coord.col) + 0.5,
                         gy: Double(c.coord.row) + 0.5,
-                        gz: (c.kind == .neonTetra || c.kind == .bettaFish) ? 18.0 : 0.0,
+                        gz: (c.kind == .neonTetra || c.kind == .bettaFish || c.kind == .clownfish || c.kind == .blueTang || c.kind == .seahorse) ? 16.0 : 0.0,
                         facingRight: true,
                         behavior: state.isSleeping ? .sleep : .idle
                     )
@@ -664,6 +685,18 @@ struct PixelStageView: View {
                         drawSheetFrame(in: &ctx, sheet: "char_oto_catfish_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 16, height: 12), screenPos: screenPos, anchor: CGPoint(x: 8, y: 9), flippedX: !c.facingRight)
                     case .crystalShrimp:
                         drawSheetFrame(in: &ctx, sheet: "char_crystal_shrimp_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 14, height: 11), screenPos: screenPos, anchor: CGPoint(x: 7, y: 9), flippedX: !c.facingRight)
+                    case .clownfish:
+                        drawSheetFrame(in: &ctx, sheet: "char_clownfish_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 20, height: 16), screenPos: screenPos, anchor: CGPoint(x: 10, y: 8), flippedX: !c.facingRight)
+                    case .starfish:
+                        drawSheetFrame(in: &ctx, sheet: "char_starfish_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 16, height: 12), screenPos: screenPos, anchor: CGPoint(x: 8, y: 9), flippedX: !c.facingRight)
+                    case .cleanerShrimp:
+                        drawSheetFrame(in: &ctx, sheet: "char_cleaner_shrimp_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 18, height: 14), screenPos: screenPos, anchor: CGPoint(x: 9, y: 11), flippedX: !c.facingRight)
+                    case .blueTang:
+                        drawSheetFrame(in: &ctx, sheet: "char_blue_tang_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 22, height: 16), screenPos: screenPos, anchor: CGPoint(x: 11, y: 8), flippedX: !c.facingRight)
+                    case .seahorse:
+                        drawSheetFrame(in: &ctx, sheet: "char_seahorse_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 14, height: 20), screenPos: screenPos, anchor: CGPoint(x: 7, y: 15), flippedX: !c.facingRight)
+                    case .hermitCrab:
+                        drawSheetFrame(in: &ctx, sheet: "char_hermit_crab_sheet", frameIndex: frameIdx, frameSize: CGSize(width: 18, height: 15), screenPos: screenPos, anchor: CGPoint(x: 9, y: 12), flippedX: !c.facingRight)
                     }
                 })
             }
@@ -705,7 +738,8 @@ struct PixelStageView: View {
                 ctx.opacity = 1.0
             }
 
-            if state.currentBiome != .aquatic {
+            let isWaterTank = (state.currentBiome == .aquatic || state.currentBiome == .reef)
+            if !isWaterTank {
                 let sleepingNow = state.isSleeping
                 let tickNow = animator.tick
                 for v in animator.aerialVisitors {
@@ -713,8 +747,8 @@ struct PixelStageView: View {
                 }
             }
 
-            // 食盆存在食物时的微弱香气提示粒子（陆生缸使用；鱼缸改为水面喂食圈，不冒水底香气）
-            if state.currentBiome != .aquatic && state.foodBowlPortions > 0 && !state.isSleeping {
+            // 食盆存在食物时的微弱香气提示粒子（陆生缸使用；鱼缸/海缸改为水面喂食圈，不冒水底香气）
+            if !isWaterTank && state.foodBowlPortions > 0 && !state.isSleeping {
                 let aromaOffset = Double((animator.tick / 4) % 8)
                 let aromaRect = CGRect(
                     x: floor(bowlPos.x + sin(Double(animator.tick) * 0.2) * 3.0) * scale,
@@ -769,7 +803,7 @@ struct PixelStageView: View {
             }
 
             // ==================== Pass 6: 透明水体叠加层、水面浮叶与喂食圈、前玻璃框 ====================
-            if state.glassFogLevel > 0.05 && state.currentBiome != .aquatic {
+            if state.glassFogLevel > 0.05 && !isWaterTank {
                 if let mistNS = PixelAssetLoader.nsImage(named: "vfx_glass_mist") {
                     context.opacity = min(0.85, state.glassFogLevel)
                     context.draw(Image(nsImage: mistNS).interpolation(.none), in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
@@ -782,9 +816,9 @@ struct PixelStageView: View {
                 }
             }
 
-            // 鱼缸透明水体与 Pass 6b 水面浮点层（水面 gz = 38.0：喂食圈、浮水睡莲、触面破灭水环）
-            if state.currentBiome == .aquatic {
-                drawFullImage("tank_water_overlay")
+            // 鱼缸与海缸透明水体与 Pass 6b 水面浮点层（水面 gz = 38.0：喂食圈、浮水睡莲、触面破灭水环）
+            if isWaterTank {
+                drawFullImage(state.currentBiome == .reef ? "tank_reef_water_overlay" : "tank_water_overlay")
 
                 // 鱼缸藻垢：严格贴合 45° 等距水体六边形轮廓渐进变绿 + 缸壁像素绿藻斑块
                 if state.glassFogLevel > 0.05 {
@@ -924,7 +958,23 @@ struct PixelStageView: View {
             drawFullImage("tank_front_glass")
 
             // Pass 7b: 仅留柔和光锥/风锥氛围叠加在前玻璃外层（器材本体已在 Pass 1b 后壁内层绘制，绝不挡鱼）
-            if state.hasHeatLamp && state.currentBiome != .aquatic && !state.isSleeping && state.thermalMode == .heating {
+            if state.currentBiome == .reef && !state.isSleeping {
+                // 海缸日间 45° 水下焦散光束；Night 模式切换为深海荧光蓝紫珊瑚灯锥
+                var reefCone = Path()
+                reefCone.move(to: CGPoint(x: 68 * scale, y: 32 * scale))
+                reefCone.addLine(to: CGPoint(x: 156 * scale, y: 32 * scale))
+                reefCone.addLine(to: CGPoint(x: 186 * scale, y: 120 * scale))
+                reefCone.addLine(to: CGPoint(x: 42 * scale, y: 120 * scale))
+                reefCone.closeSubpath()
+                let isNightReef = (state.atmosphere == .night)
+                context.fill(
+                    reefCone,
+                    with: .color(isNightReef
+                                 ? Color(red: 0.34, green: 0.24, blue: 0.96).opacity(0.11)
+                                 : Color(red: 0.42, green: 0.88, blue: 1.0).opacity(0.06))
+                )
+            }
+            if state.hasHeatLamp && !isWaterTank && !state.isSleeping && state.thermalMode == .heating {
                 var cone = Path()
                 cone.move(to: CGPoint(x: 154 * scale, y: 34 * scale))
                 cone.addLine(to: CGPoint(x: 168 * scale, y: 34 * scale))
@@ -1017,6 +1067,7 @@ struct PixelStageView: View {
         case .brass: return Color(red: 0.72, green: 0.56, blue: 0.24)
         case .frosted: return Color(red: 0.65, green: 0.80, blue: 0.88)
         case .obsidian: return Color(red: 0.12, green: 0.13, blue: 0.17)
+        case .pearlReef: return Color(red: 0.08, green: 0.24, blue: 0.42)
         }
     }
 
@@ -1027,6 +1078,7 @@ struct PixelStageView: View {
         case .brass: return Color(red: 0.94, green: 0.80, blue: 0.42).opacity(0.75)
         case .frosted: return Color.white.opacity(0.45)
         case .obsidian: return Color(red: 0.42, green: 0.35, blue: 0.68).opacity(0.75)
+        case .pearlReef: return Color(red: 0.56, green: 0.88, blue: 0.96).opacity(0.78)
         }
     }
 
@@ -1080,6 +1132,24 @@ struct PixelStageView: View {
             case .eating: return 7 + ((c.stateTicks / 3) % 3)
             case .startle: return 10 + ((c.stateTicks / 5) % 2)
             case .sleep: return 12 + ((globalTick / 10) % 2)
+            }
+
+        case .clownfish, .blueTang, .seahorse, .cleanerShrimp, .hermitCrab:
+            switch c.behavior {
+            case .idle, .petted: return (globalTick / 4) % 3
+            case .patrol, .seekingFood: return 3 + ((globalTick / 2) % 4)
+            case .eating: return 7 + ((c.stateTicks / 3) % 3)
+            case .startle: return 10 + ((c.stateTicks / 4) % 2)
+            case .sleep: return 12 + ((globalTick / 12) % 2)
+            }
+
+        case .starfish:
+            switch c.behavior {
+            case .idle, .petted: return (globalTick / 12) % 3
+            case .patrol, .seekingFood: return 3 + ((globalTick / 10) % 4)
+            case .eating: return 7 + ((c.stateTicks / 6) % 3)
+            case .startle: return 10 + ((c.stateTicks / 6) % 2)
+            case .sleep: return 12 + ((globalTick / 14) % 2)
             }
 
         case .chameleon:

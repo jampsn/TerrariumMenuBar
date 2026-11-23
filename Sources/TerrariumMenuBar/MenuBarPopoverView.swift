@@ -65,11 +65,13 @@ struct MenuBarPopoverView: View {
                         Button {
                             state.currentTab = tab
                         } label: {
+                            let baseEntries = state.codexEntries.filter { !$0.isHiddenReef }
+                            let baseUnlocked = baseEntries.filter { $0.unlocked }.count
                             let labelText = (tab == .codex)
                                 ? TerrariumL10n.t("ui.tab.codex_count", [
                                     "label": tab.localizedTitle,
-                                    "unlocked": "\(state.unlockedCodexCount)",
-                                    "total": "\(state.codexEntries.count)"
+                                    "unlocked": "\(baseUnlocked)",
+                                    "total": "\(baseEntries.count)"
                                 ])
                                 : tab.localizedTitle
                             Text(labelText)
@@ -300,10 +302,19 @@ struct MenuBarPopoverView: View {
                         .padding(.horizontal, 7)
                         .padding(.vertical, 5)
                         .frame(maxWidth: .infinity)
-                        .background(isSelected ? accentGreen : bgCard)
+                        .background(
+                            container.instance.biome == .reef
+                            ? (isSelected ? Color(red: 0.10, green: 0.34, blue: 0.56) : Color(red: 0.11, green: 0.21, blue: 0.36))
+                            : (isSelected ? accentGreen : bgCard)
+                        )
                         .foregroundColor(isSelected ? .white : textMain)
                         .overlay(
-                            Rectangle().stroke(isSelected ? adminAmber : borderCol, lineWidth: isSelected ? 1.5 : 1)
+                            Rectangle().stroke(
+                                container.instance.biome == .reef
+                                ? (isSelected ? Color(red: 0.96, green: 0.49, blue: 0.32) : Color(red: 0.96, green: 0.49, blue: 0.32).opacity(0.65))
+                                : (isSelected ? adminAmber : borderCol),
+                                lineWidth: isSelected ? 1.5 : 1
+                            )
                         )
                     }
                     .buttonStyle(.plain)
@@ -357,7 +368,7 @@ struct MenuBarPopoverView: View {
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(textMuted)
                     HStack(spacing: 5) {
-                        ForEach(TerrariumBiome.allCases) { biome in
+                        ForEach(TerrariumBiome.allCases.filter { !$0.isHiddenUnlockable }) { biome in
                             let cost = TerrariumConfig.tankPurchaseCost(for: biome, existingTankCount: state.containers.count)
                             let canBuy = biome.isPlayableInCurrentWave
                                 && state.containers.count < TerrariumConfig.maxTankSlots
@@ -389,6 +400,49 @@ struct MenuBarPopoverView: View {
                             .disabled(!canBuy)
                         }
                     }
+
+                    let reefCost = TerrariumConfig.tankPurchaseCost(for: .reef, existingTankCount: state.containers.count)
+                    let reefUnlocked = state.reefUnlockProgress.isUnlocked || state.isAdminMode
+                    let canBuyReef = reefUnlocked && state.containers.count < TerrariumConfig.maxTankSlots && state.ecoPoints >= reefCost
+                    if reefUnlocked {
+                        Button {
+                            state.purchaseNewTank(biome: .reef)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text("🪸 \(TerrariumBiome.reef.localizedName)")
+                                    .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                                Spacer()
+                                Text(TerrariumL10n.t("ui.common.cost_points", ["cost": "\(reefCost)"]))
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .frame(maxWidth: .infinity)
+                            .background(canBuyReef ? Color(red: 0.10, green: 0.34, blue: 0.56) : bgCard)
+                            .foregroundColor(canBuyReef ? .white : textMuted.opacity(0.65))
+                            .overlay(Rectangle().stroke(Color(red: 0.96, green: 0.49, blue: 0.32), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!canBuyReef)
+                    } else {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(TerrariumL10n.t("ui.buy_tank.reef_locked_title"))
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundColor(Color(red: 0.52, green: 0.78, blue: 0.96))
+                            Text(TerrariumL10n.t("ui.buy_tank.reef_locked_desc", [
+                                "tanks": "\(state.reefUnlockProgress.ownedBaseTankCount)",
+                                "animals": "\(state.reefUnlockProgress.collectedBaseAnimalCount)"
+                            ]))
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(textMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(red: 0.09, green: 0.14, blue: 0.22))
+                        .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                    }
                 }
                 .padding(7)
                 .background(bgHeader)
@@ -407,7 +461,7 @@ struct MenuBarPopoverView: View {
                 HStack(spacing: 6) {
                     Text(TerrariumL10n.t("ui.plant.title", [
                         "name": TerrariumState.displayName(forPlantSpecies: selPlant.speciesID),
-                        "stage": TerrariumState.stageLabel(for: selPlant.stage, biome: state.currentBiome)
+                        "stage": TerrariumState.stageLabel(for: selPlant.stage, biome: state.currentBiome, salinity: state.salinity)
                     ]))
                         .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
                         .foregroundColor(textMain)
@@ -588,7 +642,8 @@ struct MenuBarPopoverView: View {
                 )
                 VStack(spacing: 3) {
                     HStack(spacing: 3) {
-                        Text(TerrariumL10n.t(state.currentBiome == .aquatic ? "sensor.water_temp" : "sensor.temp"))
+                        let isWaterTank = (state.currentBiome == .aquatic || state.currentBiome == .reef)
+                        Text(TerrariumL10n.t(isWaterTank ? "sensor.water_temp" : "sensor.temp"))
                             .foregroundColor(textMuted)
                             .lineLimit(1)
                             .minimumScaleFactor(0.72)
@@ -672,18 +727,66 @@ struct MenuBarPopoverView: View {
                 .background(bgCard)
                 .overlay(Rectangle().stroke(borderCol, lineWidth: 1.5))
 
-                readOnlySensorBox(
-                    label: TerrariumL10n.t(state.currentBiome == .aquatic ? "sensor.oxygen" : "sensor.humidity"),
-                    value: "\(state.humidity)%",
-                    hint: state.humHint,
-                    allowAdminButtons: state.isAdminMode,
-                    onMinus: { state.adjustHumidity(-5) },
-                    onPlus: { state.adjustHumidity(5) }
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                let isWaterTank = (state.currentBiome == .aquatic || state.currentBiome == .reef)
+                if state.currentBiome == .reef {
+                    VStack(spacing: 3) {
+                        HStack(spacing: 3) {
+                            Text(TerrariumL10n.t("sensor.oxygen"))
+                                .foregroundColor(textMuted)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.72)
+                            Spacer(minLength: 2)
+                            Text("\(state.humidity)%")
+                                .bold()
+                                .foregroundColor(textMain)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        HStack(spacing: 3) {
+                            Text("\(String(format: "%.1f", state.salinity))‰·\(state.salinityHint)")
+                                .font(.system(size: 9.5, design: .monospaced))
+                                .foregroundColor(TerrariumConfig.optimalSalinityRange.contains(state.salinity) ? textMuted : adminAmber)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.68)
+                            Spacer(minLength: 2)
+                            Button(TerrariumL10n.t("sensor.add_salt_btn")) {
+                                state.addSeaSalt()
+                            }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .fixedSize(horizontal: true, vertical: false)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(bgHeader)
+                            .foregroundColor(Color(red: 0.56, green: 0.85, blue: 0.99))
+                            .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                            .help(TerrariumL10n.t("sensor.add_salt_help"))
+                            if state.isAdminMode {
+                                miniBtn("-", action: { state.adjustHumidity(-5) })
+                                miniBtn("+", action: { state.adjustHumidity(5) })
+                            }
+                        }
+                        .frame(minHeight: 16)
+                    }
+                    .font(.system(size: 11, design: .monospaced))
+                    .padding(6)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .background(bgCard)
+                    .overlay(Rectangle().stroke(borderCol, lineWidth: 1.5))
+                } else {
+                    readOnlySensorBox(
+                        label: TerrariumL10n.t(isWaterTank ? "sensor.oxygen" : "sensor.humidity"),
+                        value: "\(state.humidity)%",
+                        hint: state.humHint,
+                        allowAdminButtons: state.isAdminMode,
+                        onMinus: { state.adjustHumidity(-5) },
+                        onPlus: { state.adjustHumidity(5) }
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                }
                 VStack(spacing: 3) {
                     HStack(spacing: 3) {
-                        Text(TerrariumL10n.t(state.currentBiome == .aquatic ? "sensor.feeding_ring" : "sensor.food_bowl"))
+                        Text(TerrariumL10n.t(isWaterTank ? "sensor.feeding_ring" : "sensor.food_bowl"))
                             .foregroundColor(textMuted)
                             .lineLimit(1)
                             .minimumScaleFactor(0.72)
@@ -723,7 +826,7 @@ struct MenuBarPopoverView: View {
             if let pendingThermal = state.pendingPurchaseThermalMode {
                 let isHeat = (pendingThermal == .heating)
                 let equipName = TerrariumL10n.t(isHeat
-                                                ? (state.currentBiome == .aquatic ? "ui.equip.heater" : "ui.equip.heat_lamp")
+                                                ? ((state.currentBiome == .aquatic || state.currentBiome == .reef) ? "ui.equip.heater" : "ui.equip.heat_lamp")
                                                 : "ui.equip.cooling_fan")
                 let cost = isHeat ? TerrariumConfig.heatLampCost : TerrariumConfig.coolingFanCost
                 HStack(spacing: 6) {
@@ -765,9 +868,17 @@ struct MenuBarPopoverView: View {
 
             // 4 个自然演进核心交互按钮
             HStack(spacing: 6) {
-                pixelActionButton(icon: "icon_mist", title: TerrariumL10n.t(state.currentBiome == .aquatic ? "action.water_o2" : "action.mist")) { state.mist() }
-                pixelActionButton(icon: "icon_feed", title: TerrariumL10n.t(state.currentBiome == .aquatic ? "action.feed_fish" : "action.feed_land")) { state.feed() }
-                pixelActionButton(icon: "icon_clean", title: TerrariumL10n.t(state.currentBiome == .aquatic ? "action.clean_algae" : "action.clean_fog")) { state.clean() }
+                let firstActionKey: String = {
+                    switch state.currentBiome {
+                    case .aquatic: return "action.water_o2"
+                    case .reef: return "action.ro_water"
+                    default: return "action.mist"
+                    }
+                }()
+                let isWaterTank = (state.currentBiome == .aquatic || state.currentBiome == .reef)
+                pixelActionButton(icon: "icon_mist", title: TerrariumL10n.t(firstActionKey)) { state.mist() }
+                pixelActionButton(icon: "icon_feed", title: TerrariumL10n.t(isWaterTank ? "action.feed_fish" : "action.feed_land")) { state.feed() }
+                pixelActionButton(icon: "icon_clean", title: TerrariumL10n.t(isWaterTank ? "action.clean_algae" : "action.clean_fog")) { state.clean() }
                 pixelActionButton(
                     icon: "icon_sleep",
                     title: TerrariumL10n.t(state.isSleeping ? "action.wake" : "action.sleep"),
@@ -1479,6 +1590,7 @@ struct MenuBarPopoverView: View {
         case .brass: return Color(red: 0.72, green: 0.56, blue: 0.24)
         case .frosted: return Color(red: 0.65, green: 0.80, blue: 0.88)
         case .obsidian: return Color(red: 0.18, green: 0.16, blue: 0.28)
+        case .pearlReef: return Color(red: 0.14, green: 0.42, blue: 0.64)
         }
     }
 
@@ -1507,6 +1619,8 @@ struct MenuBarPopoverView: View {
                     switch state.currentBiome {
                     case .aquatic:
                         return TerrariumL10n.t("ui.critters.rule_aquatic")
+                    case .reef:
+                        return TerrariumL10n.t("ui.critters.rule_reef")
                     case .rainforest:
                         return TerrariumL10n.t("ui.critters.rule_rainforest")
                     default:
@@ -1645,9 +1759,11 @@ struct MenuBarPopoverView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     HStack(spacing: 6) {
+                        let baseEntries = state.codexEntries.filter { !$0.isHiddenReef }
+                        let baseUnlocked = baseEntries.filter { $0.unlocked }.count
                         Button(TerrariumL10n.t("ui.codex.tab_species", [
-                            "unlocked": "\(state.unlockedCodexCount)",
-                            "total": "\(state.codexEntries.count)"
+                            "unlocked": "\(baseUnlocked)",
+                            "total": "\(baseEntries.count)"
                         ])) {
                             state.isShowingAchievementsInCodexTab = false
                         }
@@ -1737,7 +1853,11 @@ struct MenuBarPopoverView: View {
                         .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
                     }
                 } else {
-                    ForEach(state.codexEntries) { entry in
+                    let baseEntries = state.codexEntries.filter { !$0.isHiddenReef }
+                    let hiddenEntries = state.codexEntries.filter { $0.isHiddenReef }
+                    let hiddenUnlocked = hiddenEntries.filter { $0.unlocked }.count
+
+                    ForEach(baseEntries) { entry in
                     VStack(alignment: .leading, spacing: 3) {
                         HStack {
                             Text("\(entry.unlocked ? "✅" : "🔒") \(entry.name) · \(entry.category)")
@@ -1765,6 +1885,59 @@ struct MenuBarPopoverView: View {
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(bgHeader.opacity(entry.unlocked ? 1 : 0.6))
+                    .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                    }
+
+                    // 独立隐藏海域图鉴（未解锁显示 ???，绝不剧透且不影响 52 项基础全收集）
+                    HStack {
+                        Text(TerrariumL10n.t("ui.codex.hidden_header", [
+                            "unlocked": "\(hiddenUnlocked)",
+                            "total": "\(hiddenEntries.count)"
+                        ]))
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color(red: 0.56, green: 0.85, blue: 0.99))
+                        Spacer()
+                    }
+                    .padding(.top, 6)
+
+                    let isReefEverUnlocked = state.reefUnlockProgress.isUnlocked
+                        || state.isAdminMode
+                        || state.containers.contains(where: { $0.instance.biome == .reef })
+
+                    ForEach(hiddenEntries) { entry in
+                    let isRevealed = entry.unlocked
+                    let showCondition = isRevealed || isReefEverUnlocked
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack {
+                            Text(isRevealed
+                                 ? "✅ \(entry.name) · \(entry.category)"
+                                 : "🔒 \(TerrariumL10n.t("ui.codex.hidden_name")) · \(TerrariumL10n.t("ui.codex.hidden_cat"))")
+                                .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+                                .foregroundColor(isRevealed ? textMain : Color(red: 0.56, green: 0.85, blue: 0.99))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.78)
+                            Spacer(minLength: 4)
+                            Text(isRevealed ? entry.biome.localizedShortName : "???")
+                                .font(.system(size: 9.5, design: .monospaced))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(bgCard)
+                                .foregroundColor(textMuted)
+                        }
+                        Text(TerrariumL10n.t("ui.codex.entry_cond", [
+                            "cond": showCondition ? entry.condition : TerrariumL10n.t("ui.codex.hidden_cond")
+                        ]))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(textMuted)
+                        Text(isRevealed ? entry.desc : TerrariumL10n.t("ui.codex.hidden_desc"))
+                            .font(.system(size: 10.5, design: .monospaced))
+                            .foregroundColor(textMain.opacity(0.85))
+                    }
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(red: 0.09, green: 0.14, blue: 0.22).opacity(isRevealed ? 1 : 0.7))
                     .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
                     }
                 }

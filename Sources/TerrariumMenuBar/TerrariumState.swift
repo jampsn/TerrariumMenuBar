@@ -48,6 +48,8 @@ final class TerrariumState: ObservableObject {
     @Published var atmosphere: SceneAtmosphere = .day
     @Published var temperature: Int = 22
     @Published var humidity: Int = 30
+    @Published var salinity: Double = TerrariumConfig.defaultReefSalinity
+    @Published var reefUnlockProgress: TerrariumConfig.ReefUnlockProgress = TerrariumConfig.ReefUnlockProgress(ownedBaseTankCount: 1, collectedBaseAnimalCount: 0, isUnlocked: false)
     @Published var isSleeping: Bool = false
     @Published var hasWeatherEvent: Bool = false
     @Published var eventMessage: String? = nil
@@ -236,7 +238,7 @@ final class TerrariumState: ObservableObject {
             case .meadow: return 35
             case .sand: return 20
             case .rainforest: return 50
-            case .aquatic: return 50
+            case .aquatic, .reef: return 50
             }
         }()
         if humidity < dryThreshold { return .dry }
@@ -308,8 +310,9 @@ final class TerrariumState: ObservableObject {
 
     var menuBarTooltip: String {
         let prefix = isSleeping ? TerrariumL10n.t("state.tooltip_sleep_prefix") : ""
-        let humLabel = TerrariumL10n.t(currentBiome == .aquatic ? "sensor.oxygen" : "sensor.humidity")
-        let bowlLabel = TerrariumL10n.t(currentBiome == .aquatic ? "sensor.feeding_ring" : "sensor.food_bowl")
+        let isWaterTank = (currentBiome == .aquatic || currentBiome == .reef)
+        let humLabel = TerrariumL10n.t(isWaterTank ? "sensor.oxygen" : "sensor.humidity")
+        let bowlLabel = TerrariumL10n.t(isWaterTank ? "sensor.feeding_ring" : "sensor.food_bowl")
         let critLabel = TerrariumL10n.t("sensor.critters_count", ["count": "\(activeDisplayCritters.count)"])
         return TerrariumL10n.t("state.tooltip", [
             "prefix": prefix,
@@ -339,6 +342,8 @@ final class TerrariumState: ObservableObject {
                 return TerrariumL10n.t(humidity < 60 ? "state.status.bare_rainforest" : "state.status.wet_rainforest")
             case .aquatic:
                 return TerrariumL10n.t(humidity < 55 ? "state.status.bare_aquatic" : "state.status.oxy_aquatic")
+            case .reef:
+                return TerrariumL10n.t("state.status.bare_reef")
             }
         }
         if critters.isEmpty {
@@ -352,6 +357,11 @@ final class TerrariumState: ObservableObject {
         if tipsFrequency != .off {
             if currentBiome == .sand && (humidity >= 80 || plants.contains(where: { $0.stage == .wilting })) {
                 return TerrariumL10n.t("tips.alert.sand_wet")
+            }
+            if currentBiome == .reef {
+                if salinity > 36.5 { return TerrariumL10n.t("tips.alert.reef_salty") }
+                if salinity < 32.0 { return TerrariumL10n.t("tips.alert.reef_low_salt") }
+                if plants.contains(where: { $0.stage == .wilting }) { return TerrariumL10n.t("tips.alert.aquatic_o2") }
             }
             if currentBiome == .aquatic && plants.contains(where: { $0.stage == .wilting }) {
                 return TerrariumL10n.t("tips.alert.aquatic_o2")
@@ -372,6 +382,9 @@ final class TerrariumState: ObservableObject {
                 "max": "\(TerrariumConfig.maxFoodPortions)"
             ])
         }
+        if currentBiome == .reef {
+            return TerrariumL10n.t("state.status.steady_reef")
+        }
         if humidity >= TerrariumConfig.dewHeavyHumidityThreshold && currentBiome == .meadow {
             return TerrariumL10n.t("state.status.high_dew")
         }
@@ -390,12 +403,22 @@ final class TerrariumState: ObservableObject {
 
     var humHint: String {
         let opt = TerrariumConfig.optimalHumidityRange(for: currentBiome)
-        if currentBiome == .aquatic {
+        if currentBiome == .aquatic || currentBiome == .reef {
             return TerrariumL10n.t(humidity < opt.lowerBound ? "sensor.hum_low_o2" : "sensor.hum_ok_o2")
         }
         if humidity < opt.lowerBound { return TerrariumL10n.t("sensor.hum_dry") }
         if humidity > opt.upperBound { return TerrariumL10n.t("sensor.hum_wet") }
         return TerrariumL10n.t("sensor.hum_optimal")
+    }
+
+    var salinityHint: String {
+        if salinity > TerrariumConfig.optimalSalinityRange.upperBound {
+            return TerrariumL10n.t("sensor.salinity_high")
+        }
+        if salinity < TerrariumConfig.optimalSalinityRange.lowerBound {
+            return TerrariumL10n.t("sensor.salinity_low")
+        }
+        return TerrariumL10n.t("sensor.salinity_opt")
     }
 
     // MARK: - 管理员模式切换
@@ -643,13 +666,17 @@ final class TerrariumState: ObservableObject {
 
         inst.humidity = TerrariumSimulation.clampHumidity(inst.humidity + 12)
         inst.mistDewBoostSeconds = 180.0
-        if inst.biome != .aquatic && inst.humidity >= TerrariumConfig.dewLightHumidityThreshold {
+        if inst.biome == .reef {
+            // 海缸「补淡水」：提升溶氧同时稀释盐度 -1.2‰
+            let curSal = inst.salinity ?? TerrariumConfig.defaultReefSalinity
+            inst.salinity = TerrariumSimulation.clampSalinity(curSal - 1.2)
+        } else if inst.biome != .aquatic && inst.humidity >= TerrariumConfig.dewLightHumidityThreshold {
             inst.glassFogLevel = min(1.0, inst.glassFogLevel + 0.03)
         }
         TerrariumSimulation.updatePlants(instance: &inst, dt: 0)
 
         // 冷启动破冰加速：每缸终身仅限 1 次（防止“喷水催芽->修剪幼苗”刷点循环）
-        let sproutHumThreshold = (inst.biome == .rainforest) ? 60 : ((inst.biome == .aquatic) ? 55 : 45)
+        let sproutHumThreshold = (inst.biome == .rainforest) ? 60 : ((inst.biome == .aquatic || inst.biome == .reef) ? 55 : 45)
         if !inst.hasTriggeredColdStart && inst.plants.isEmpty && inst.humidity >= sproutHumThreshold {
             inst.plantPulseSeconds += 8.0
             if inst.plantPulseSeconds >= TerrariumConfig.coldStartPlantPulseSeconds {
@@ -671,6 +698,19 @@ final class TerrariumState: ObservableObject {
         evaluateCurrentCodexAndSave()
     }
 
+    func addSeaSalt() {
+        var inst = activeInstance
+        guard inst.biome == .reef, !inst.isSleeping else { return }
+        let curSal = inst.salinity ?? TerrariumConfig.defaultReefSalinity
+        let nextSal = TerrariumSimulation.clampSalinity(curSal + 1.5)
+        inst.salinity = nextSal
+        TerrariumSimulation.updatePlants(instance: &inst, dt: 0)
+        activeInstance = inst
+        bannerNotice = TerrariumL10n.t("state.salt_added", ["sal": String(format: "%.1f", nextSal)])
+        vfxSubject.send(.clean)
+        evaluateCurrentCodexAndSave()
+    }
+
     func feed() {
         var inst = activeInstance
         guard !inst.isSleeping else { return }
@@ -687,7 +727,8 @@ final class TerrariumState: ObservableObject {
         activeInstance = inst
 
         let feedCoord = TerrariumConfig.feedingCoord(for: inst.biome)
-        let targetGZ = (inst.biome == .aquatic) ? TerrariumConfig.waterSurfaceGZ : 3.0
+        let isWaterTank = (inst.biome == .aquatic || inst.biome == .reef)
+        let targetGZ = isWaterTank ? TerrariumConfig.waterSurfaceGZ : 3.0
         let bowlPt = TerrariumConfig.isoToScreen(
             gx: Double(feedCoord.col) + 0.5,
             gy: Double(feedCoord.row) + 0.5,
@@ -696,7 +737,7 @@ final class TerrariumState: ObservableObject {
         vfxSubject.send(.feed(bowlScreenPos: bowlPt))
 
         if inst.critters.filter({ $0.residency == .resident || $0.residency == .visitor }).isEmpty {
-            bannerNotice = TerrariumL10n.t(inst.biome == .aquatic ? "state.feed_aquatic_ok" : "state.feed_land_ok")
+            bannerNotice = TerrariumL10n.t(isWaterTank ? "state.feed_aquatic_ok" : "state.feed_land_ok")
         }
 
         evaluateCurrentCodexAndSave()
@@ -706,17 +747,18 @@ final class TerrariumState: ObservableObject {
         var inst = activeInstance
         guard !inst.isSleeping else { return }
         bannerNotice = nil
+        let isWaterTank = (inst.biome == .aquatic || inst.biome == .reef)
         let witheredCount = inst.plants.filter { $0.stage == .withered }.count
         inst.plants.removeAll { $0.stage == .withered }
         inst.glassFogLevel = 0.0
         if witheredCount > 0 {
             saveData.ecoPoints += witheredCount
             bannerNotice = TerrariumL10n.t(
-                inst.biome == .aquatic ? "state.clean_algae_withered" : "state.clean_fog_withered",
+                isWaterTank ? "state.clean_algae_withered" : "state.clean_fog_withered",
                 ["count": "\(witheredCount)"]
             )
         } else {
-            bannerNotice = TerrariumL10n.t(inst.biome == .aquatic ? "state.clean_algae" : "state.clean_fog")
+            bannerNotice = TerrariumL10n.t(isWaterTank ? "state.clean_algae" : "state.clean_fog")
         }
         activeInstance = inst
         vfxSubject.send(.clean)
@@ -897,7 +939,8 @@ final class TerrariumState: ObservableObject {
             biome: inst.biome
         )
         guard !blockedCoords.contains(coord) else {
-            bannerNotice = TerrariumL10n.t(inst.biome == .aquatic ? "state.move_plant_blocked_aquatic" : "state.move_plant_blocked_land")
+            let isWaterTank = (inst.biome == .aquatic || inst.biome == .reef)
+            bannerNotice = TerrariumL10n.t(isWaterTank ? "state.move_plant_blocked_aquatic" : "state.move_plant_blocked_land")
             return
         }
 
@@ -940,8 +983,8 @@ final class TerrariumState: ObservableObject {
         codexName(for: speciesID)
     }
 
-    static func stageLabel(for stage: PlantStage, biome: TerrariumBiome? = nil) -> String {
-        stage.localizedName(for: biome)
+    static func stageLabel(for stage: PlantStage, biome: TerrariumBiome? = nil, salinity: Double? = nil) -> String {
+        stage.localizedName(for: biome, salinity: salinity)
     }
 
     func updateCritterCoord(kind: CritterKind, coord: GridCoord) {
@@ -1153,7 +1196,7 @@ final class TerrariumState: ObservableObject {
 
         switch nextMode {
         case .heating:
-            let equipName = TerrariumL10n.t(updated.biome == .aquatic ? "ui.equip.heater" : "ui.equip.heat_lamp")
+            let equipName = TerrariumL10n.t((updated.biome == .aquatic || updated.biome == .reef) ? "ui.equip.heater" : "ui.equip.heat_lamp")
             bannerNotice = TerrariumL10n.t("state.thermal_heat_on", ["equip": equipName, "temp": "\(targetAmbient)"])
         case .cooling:
             bannerNotice = TerrariumL10n.t("state.thermal_cool_on", ["temp": "\(targetAmbient)"])
@@ -1175,7 +1218,7 @@ final class TerrariumState: ObservableObject {
 
         if targetMode == .heating && !inst.hasHeatLamp {
             let cost = TerrariumConfig.heatLampCost
-            let equipName = TerrariumL10n.t(inst.biome == .aquatic ? "ui.equip.heater" : "ui.equip.heat_lamp")
+            let equipName = TerrariumL10n.t((inst.biome == .aquatic || inst.biome == .reef) ? "ui.equip.heater" : "ui.equip.heat_lamp")
             guard saveData.ecoPoints >= cost else {
                 bannerNotice = TerrariumL10n.t("state.thermal_need_pts", ["equip": equipName, "cost": "\(cost)"])
                 pendingPurchaseThermalMode = nil
@@ -1224,6 +1267,14 @@ final class TerrariumState: ObservableObject {
 
     @discardableResult
     func purchaseNewTank(biome: TerrariumBiome, customName: String? = nil) -> Bool {
+        if biome == .reef && !isAdminMode && !TerrariumConfig.isReefUnlocked(data: saveData) {
+            let prog = TerrariumConfig.reefUnlockProgress(data: saveData)
+            bannerNotice = TerrariumL10n.t("ui.buy_tank.reef_locked_desc", [
+                "tanks": "\(prog.ownedBaseTankCount)",
+                "animals": "\(prog.collectedBaseAnimalCount)"
+            ])
+            return false
+        }
         guard saveData.containers.count < TerrariumConfig.maxTankSlots else {
             bannerNotice = TerrariumL10n.t("state.tank_max_cap", ["max": "\(TerrariumConfig.maxTankSlots)"])
             return false
@@ -1531,6 +1582,8 @@ final class TerrariumState: ObservableObject {
         atmosphere = inst.atmosphere
         temperature = inst.temperature
         humidity = inst.humidity
+        salinity = inst.salinity ?? TerrariumConfig.defaultReefSalinity
+        reefUnlockProgress = TerrariumConfig.reefUnlockProgress(data: saveData)
         isSleeping = inst.isSleeping
         ecoPoints = saveData.ecoPoints
         foodBowlPortions = inst.foodBowlPortions

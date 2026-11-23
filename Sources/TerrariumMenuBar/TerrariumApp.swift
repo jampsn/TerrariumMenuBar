@@ -57,8 +57,8 @@ struct TerrariumMenuBarApp: App {
             "menubar_icon_normal", "menubar_icon_event", "menubar_icon_dry", "menubar_icon_hungry", "menubar_icon_night", "menubar_icon_sleep",
             "bg_room_day", "bg_room_night", "bg_room_rain", "bg_room_warm",
             "tank_back_glass", "tank_front_glass", "tank_lid_sleep",
-            "terrain_meadow_dry", "terrain_meadow_wet", "terrain_sand_dry", "terrain_sand_wet", "terrain_rainforest_dry", "terrain_rainforest_wet", "terrain_aquatic_clean", "terrain_aquatic_murky",
-            "tank_water_overlay", "vfx_bubble_sheet", "env_aquatic_feeding_ring", "plant_lotus_stem",
+            "terrain_meadow_dry", "terrain_meadow_wet", "terrain_sand_dry", "terrain_sand_wet", "terrain_rainforest_dry", "terrain_rainforest_wet", "terrain_aquatic_clean", "terrain_aquatic_murky", "terrain_reef_clean", "terrain_reef_murky",
+            "tank_water_overlay", "tank_reef_water_overlay", "vfx_bubble_sheet", "env_aquatic_feeding_ring", "plant_lotus_stem",
             "equip_heat_lamp", "equip_cooling_fan", "equip_aquarium_heater",
             "env_shallow_pool", "env_driftwood", "env_boulder", "env_pebbles", "env_sand_rock", "env_sand_wood", "env_food_bowl",
             "env_rainforest_vine", "env_rainforest_waterfall", "env_rainforest_bark",
@@ -67,12 +67,14 @@ struct TerrariumMenuBarApp: App {
             "env_sand_cairn", "env_sand_rib_arch",
             "env_rainforest_bromeliad_stump", "env_rainforest_slate_ledge",
             "env_aquatic_seiryu_stone", "env_aquatic_bamboo_tube",
+            "env_reef_live_rock", "env_reef_wavemaker", "env_reef_coral_cave", "env_reef_giant_clam", "env_reef_sand_shells",
             "plant_fern_sheet", "plant_clover_sheet", "plant_moss_clump", "plant_glow_shroom_sheet", "plant_red_shroom_sheet",
             "plant_succulent_sheet", "plant_cactus_sheet", "plant_aloe_sheet",
             "plant_monstera_sheet", "plant_bromeliad_sheet", "plant_orchid_sheet",
             "plant_marimo_sheet", "plant_anubias_sheet", "plant_lotus_sheet",
             "plant_sundew_sheet", "plant_lithops_sheet", "plant_agave_sheet",
             "plant_pitcher_sheet", "plant_calathea_sheet", "plant_vallisneria_sheet", "plant_red_ludwigia_sheet",
+            "plant_coral_zoanthid_sheet", "plant_coral_acropora_sheet", "plant_coral_brain_sheet", "plant_coral_anemone_sheet", "plant_coral_seafan_sheet",
             "vfx_dew_drop_sheet", "vfx_glass_mist", "vfx_glass_streak_sheet", "vfx_aquatic_algae",
             "char_frog_sheet", "char_snail_sheet", "char_pillbug_sheet", "char_rhino_beetle_sheet", "char_beetle_sheet",
             "char_gecko_sheet", "char_scarab_sheet", "char_firefly_sheet", "char_moth_sheet",
@@ -84,6 +86,7 @@ struct TerrariumMenuBarApp: App {
             "char_red_eyed_frog_sheet", "char_oto_catfish_sheet", "char_crystal_shrimp_sheet",
             "char_dragonfly_sheet", "char_luna_cicada_sheet",
             "char_antlion_lacewing_sheet", "char_orchid_bee_sheet",
+            "char_clownfish_sheet", "char_starfish_sheet", "char_cleaner_shrimp_sheet", "char_blue_tang_sheet", "char_seahorse_sheet", "char_hermit_crab_sheet",
             "icon_mist", "icon_feed", "icon_clean", "icon_sleep"
         ]
         var failed: [String] = []

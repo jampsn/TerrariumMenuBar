@@ -5,6 +5,7 @@ public enum TerrariumBiome: String, CaseIterable, Identifiable, Codable {
     case sand = "暖阳沙地缸"
     case rainforest = "热带雨林缸"
     case aquatic = "碧波鱼缸"
+    case reef = "珊瑚礁海缸"
 
     public var id: String { rawValue }
 
@@ -14,10 +15,15 @@ public enum TerrariumBiome: String, CaseIterable, Identifiable, Codable {
         case .sand: return "🏜️"
         case .rainforest: return "🌴"
         case .aquatic: return "🐟"
+        case .reef: return "🪸"
         }
     }
 
-    /// 全 4 种生态缸（苔原/沙地/雨林/碧波鱼缸）现已全面开放购置
+    public var isHiddenUnlockable: Bool {
+        self == .reef
+    }
+
+    /// 4 种基础生态缸常驻开放，海缸作为隐藏里程碑解锁
     public var isPlayableInCurrentWave: Bool {
         true
     }
@@ -28,6 +34,7 @@ public enum TerrariumBiome: String, CaseIterable, Identifiable, Codable {
         case .sand: return "sand"
         case .rainforest: return "rainforest"
         case .aquatic: return "aquatic"
+        case .reef: return "reef"
         }
     }
 
@@ -126,12 +133,20 @@ public enum PlantStage: String, Codable, Equatable {
         localizedName(for: nil)
     }
 
-    public func localizedName(for biome: TerrariumBiome?) -> String {
+    public func localizedName(for biome: TerrariumBiome?, salinity: Double? = nil) -> String {
         if self == .wilting {
             switch biome {
             case .sand:
                 return TerrariumL10n.t("stage.wilting_sand")
             case .aquatic:
+                return TerrariumL10n.t("stage.wilting_aquatic")
+            case .reef:
+                let sal = salinity ?? 35.0
+                if sal > 36.5 {
+                    return TerrariumL10n.t("stage.wilting_reef_salty")
+                } else if sal < 32.0 {
+                    return TerrariumL10n.t("stage.wilting_reef_low")
+                }
                 return TerrariumL10n.t("stage.wilting_aquatic")
             default:
                 return TerrariumL10n.t("stage.wilting")
@@ -200,6 +215,13 @@ public enum CritterKind: String, Codable, CaseIterable {
     case corydoras = "corydoras"
     case otoCatfish = "oto_catfish"
     case crystalShrimp = "crystal_shrimp"
+    // 隐藏珊瑚礁海缸专属
+    case clownfish = "clownfish"
+    case starfish = "starfish"
+    case cleanerShrimp = "cleaner_shrimp"
+    case blueTang = "blue_tang"
+    case seahorse = "seahorse"
+    case hermitCrab = "hermit_crab"
 
     public var localizedName: String {
         TerrariumL10n.t("critter.\(rawValue).name")
@@ -212,6 +234,7 @@ public enum TankFrameSkin: String, Codable, CaseIterable, Identifiable {
     case brass = "brass"
     case frosted = "frosted"
     case obsidian = "obsidian"
+    case pearlReef = "pearl_reef"
 
     public var id: String { rawValue }
     public var displayName: String {
@@ -224,6 +247,7 @@ public enum TankFrameSkin: String, Codable, CaseIterable, Identifiable {
         case .brass: return 45
         case .frosted: return 45
         case .obsidian: return 80
+        case .pearlReef: return 95
         }
     }
 }
@@ -238,6 +262,8 @@ public enum FoodChainGroup: String, Codable, Equatable {
     case aquaticPeaceful = "温顺鱼虾共生群"
     case aquaticBetta = "半月斗鱼领地"
     case aquaticPredator = "螯虾水底领地"
+    case reefSymbiosis = "珊瑚礁共生群"
+    case reefSeahorse = "幽蓝海马独行群"
 
     public var localizedName: String {
         switch self {
@@ -250,6 +276,8 @@ public enum FoodChainGroup: String, Codable, Equatable {
         case .aquaticPeaceful: return TerrariumL10n.t("foodchain.aquatic_peaceful")
         case .aquaticBetta: return TerrariumL10n.t("foodchain.aquatic_betta")
         case .aquaticPredator: return TerrariumL10n.t("foodchain.aquatic_predator")
+        case .reefSymbiosis: return TerrariumL10n.t("foodchain.reef_symbiosis")
+        case .reefSeahorse: return TerrariumL10n.t("foodchain.reef_seahorse")
         }
     }
 }
@@ -404,8 +432,9 @@ public struct CodexEntry: Identifiable, Codable, Equatable {
     public let condition: String
     public let desc: String
     public var unlocked: Bool
+    public let isHiddenReef: Bool
 
-    public init(id: String, name: String, biome: TerrariumBiome, category: String, condition: String, desc: String, unlocked: Bool) {
+    public init(id: String, name: String, biome: TerrariumBiome, category: String, condition: String, desc: String, unlocked: Bool, isHiddenReef: Bool = false) {
         self.id = id
         self.name = name
         self.biome = biome
@@ -413,6 +442,7 @@ public struct CodexEntry: Identifiable, Codable, Equatable {
         self.condition = condition
         self.desc = desc
         self.unlocked = unlocked
+        self.isHiddenReef = isHiddenReef
     }
 }
 
@@ -450,6 +480,8 @@ public struct TerrariumInstanceState: Codable, Equatable {
     public var ambientRelaxSeconds: TimeInterval
     public var plantPulseSeconds: TimeInterval
     public var hasTriggeredColdStart: Bool
+    /// 海缸盐度（千分比 ‰，默认 35.0，仅 .reef 使用；非海缸为 nil）
+    public var salinity: Double?
 
     private enum CodingKeys: String, CodingKey {
         case biome, atmosphere, temperature, humidity, isSleeping, foodBowlPortions
@@ -457,7 +489,7 @@ public struct TerrariumInstanceState: Codable, Equatable {
         case unlockedDecorIDs, enabledDecorIDs, decorOrigins, thermalMode, hasHeatLamp, hasCoolingFan
         case nextWeatherEventAt, weatherCooldownEndAt
         case accumulatedEcoSeconds, accumulatedHumidityDecaySeconds
-        case ambientRelaxSeconds, plantPulseSeconds, hasTriggeredColdStart
+        case ambientRelaxSeconds, plantPulseSeconds, hasTriggeredColdStart, salinity
     }
 
     public init(
@@ -483,7 +515,8 @@ public struct TerrariumInstanceState: Codable, Equatable {
         accumulatedHumidityDecaySeconds: TimeInterval,
         ambientRelaxSeconds: TimeInterval,
         plantPulseSeconds: TimeInterval,
-        hasTriggeredColdStart: Bool = false
+        hasTriggeredColdStart: Bool = false,
+        salinity: Double? = nil
     ) {
         self.biome = biome
         self.atmosphere = atmosphere
@@ -508,6 +541,7 @@ public struct TerrariumInstanceState: Codable, Equatable {
         self.ambientRelaxSeconds = ambientRelaxSeconds
         self.plantPulseSeconds = plantPulseSeconds
         self.hasTriggeredColdStart = hasTriggeredColdStart
+        self.salinity = salinity
     }
 
     public init(from decoder: Decoder) throws {
@@ -536,21 +570,26 @@ public struct TerrariumInstanceState: Codable, Equatable {
         self.ambientRelaxSeconds = try c.decode(TimeInterval.self, forKey: .ambientRelaxSeconds)
         self.plantPulseSeconds = try c.decode(TimeInterval.self, forKey: .plantPulseSeconds)
         self.hasTriggeredColdStart = try c.decodeIfPresent(Bool.self, forKey: .hasTriggeredColdStart) ?? !decodedPlants.isEmpty
+        let decodedSal = try c.decodeIfPresent(Double.self, forKey: .salinity)
+        self.salinity = (self.biome == .reef) ? (decodedSal ?? 35.0) : decodedSal
     }
 
     public static func empty(biome: TerrariumBiome, now: Date = Date(), nextEventDelay: TimeInterval = 1500) -> TerrariumInstanceState {
         let initialTemp: Int
         let initialHumidity: Int
         let initialAtm: SceneAtmosphere
+        let initialSalinity: Double?
         switch biome {
         case .meadow:
-            initialTemp = 22; initialHumidity = 35; initialAtm = .day
+            initialTemp = 22; initialHumidity = 35; initialAtm = .day; initialSalinity = nil
         case .sand:
-            initialTemp = 27; initialHumidity = 28; initialAtm = .warm
+            initialTemp = 27; initialHumidity = 28; initialAtm = .warm; initialSalinity = nil
         case .rainforest:
-            initialTemp = 25; initialHumidity = 65; initialAtm = .day
+            initialTemp = 25; initialHumidity = 65; initialAtm = .day; initialSalinity = nil
         case .aquatic:
-            initialTemp = 24; initialHumidity = 60; initialAtm = .day
+            initialTemp = 24; initialHumidity = 60; initialAtm = .day; initialSalinity = nil
+        case .reef:
+            initialTemp = 25; initialHumidity = 70; initialAtm = .day; initialSalinity = 35.0
         }
         return TerrariumInstanceState(
             biome: biome,
@@ -574,7 +613,9 @@ public struct TerrariumInstanceState: Codable, Equatable {
             accumulatedEcoSeconds: 0,
             accumulatedHumidityDecaySeconds: 0,
             ambientRelaxSeconds: 0,
-            plantPulseSeconds: 0
+            plantPulseSeconds: 0,
+            hasTriggeredColdStart: false,
+            salinity: initialSalinity
         )
     }
 }

@@ -263,6 +263,8 @@ public final class TerrariumL10n {
             keys.append("tips.biome.rainforest")
         case .aquatic:
             keys.append("tips.biome.aquatic")
+        case .reef:
+            keys.append("tips.biome.reef")
         }
         return keys
     }
