@@ -462,7 +462,7 @@ struct PixelStageView: View {
                     switch plant.speciesID {
                     case "fern":
                         let fIdx = isSprout ? 3 : (isWilting ? 4 : (state.isSleeping ? 0 : ((animator.tick / 7 + idx + phaseShift) % 3)))
-                        drawSheetFrame(in: &ctx, sheet: "plant_fern_sheet", frameIndex: fIdx, frameSize: CGSize(width: 32, height: 32), screenPos: screenPos, anchor: CGPoint(x: 16, y: 26), flippedX: flipPlant)
+                        drawSheetFrame(in: &ctx, sheet: "plant_fern_sheet", frameIndex: fIdx, frameSize: CGSize(width: 32, height: 32), screenPos: screenPos, anchor: CGPoint(x: 16, y: isSprout ? 26 : 22), flippedX: flipPlant)
                     case "clover":
                         let fIdx = isSprout ? 2 : (isWilting ? 3 : (state.isSleeping ? 0 : ((animator.tick / 9 + idx + phaseShift) % 2)))
                         drawSheetFrame(in: &ctx, sheet: "plant_clover_sheet", frameIndex: fIdx, frameSize: CGSize(width: 18, height: 14), screenPos: screenPos, anchor: CGPoint(x: 9, y: 11), flippedX: flipPlant)
@@ -471,28 +471,28 @@ struct PixelStageView: View {
                         drawSheetFrame(in: &ctx, sheet: "plant_moss_clump", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 12), screenPos: screenPos, anchor: CGPoint(x: 10, y: 9), flippedX: flipPlant)
                     case "glow_shroom":
                         let fIdx = isSprout ? 3 : (isWilting ? 4 : (state.isSleeping ? 0 : ((animator.tick / 6 + idx + phaseShift) % 3)))
-                        drawSheetFrame(in: &ctx, sheet: "plant_glow_shroom_sheet", frameIndex: fIdx, frameSize: CGSize(width: 16, height: 16), screenPos: screenPos, anchor: CGPoint(x: 8, y: 13), flippedX: flipPlant)
+                        drawSheetFrame(in: &ctx, sheet: "plant_glow_shroom_sheet", frameIndex: fIdx, frameSize: CGSize(width: 16, height: 16), screenPos: screenPos, anchor: CGPoint(x: 8, y: isSprout ? 13 : (isWilting ? 11 : 12)), flippedX: flipPlant)
                     case "succulent":
                         let fIdx = isSprout ? 2 : (isWilting ? 3 : ((state.humidity >= 50 || phaseShift == 1) ? 1 : 0))
                         drawSheetFrame(in: &ctx, sheet: "plant_succulent_sheet", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 16), screenPos: screenPos, anchor: CGPoint(x: 10, y: 12), flippedX: flipPlant)
                     case "cactus":
                         let fIdx = isSprout ? 2 : (isWilting ? 3 : (plant.stage == .mature || plant.stage == .lushDew ? 1 : 0))
-                        drawSheetFrame(in: &ctx, sheet: "plant_cactus_sheet", frameIndex: fIdx, frameSize: CGSize(width: 18, height: 20), screenPos: screenPos, anchor: CGPoint(x: 9, y: 15), flippedX: flipPlant)
+                        drawSheetFrame(in: &ctx, sheet: "plant_cactus_sheet", frameIndex: fIdx, frameSize: CGSize(width: 18, height: 20), screenPos: screenPos, anchor: CGPoint(x: 9, y: isSprout ? 15 : 13), flippedX: flipPlant)
                     case "aloe":
                         let fIdx = isSprout ? 2 : (isWilting ? 3 : ((state.humidity >= 40 || phaseShift == 1) ? 1 : 0))
                         drawSheetFrame(in: &ctx, sheet: "plant_aloe_sheet", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 18), screenPos: screenPos, anchor: CGPoint(x: 10, y: 13), flippedX: flipPlant)
                     case "monstera":
                         let fIdx = isSprout ? 3 : (isWilting ? 4 : (state.isSleeping ? 0 : ((animator.tick / 8 + idx + phaseShift) % 3)))
-                        drawSheetFrame(in: &ctx, sheet: "plant_monstera_sheet", frameIndex: fIdx, frameSize: CGSize(width: 28, height: 28), screenPos: screenPos, anchor: CGPoint(x: 14, y: 22), flippedX: flipPlant)
+                        drawSheetFrame(in: &ctx, sheet: "plant_monstera_sheet", frameIndex: fIdx, frameSize: CGSize(width: 28, height: 28), screenPos: screenPos, anchor: CGPoint(x: 14, y: (isSprout || isWilting) ? 24 : 25), flippedX: flipPlant)
                     case "bromeliad":
                         let fIdx = isSprout ? 2 : (isWilting ? 3 : ((plant.dewLevel > 0 || phaseShift == 1) ? 1 : 0))
-                        drawSheetFrame(in: &ctx, sheet: "plant_bromeliad_sheet", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 20), screenPos: screenPos, anchor: CGPoint(x: 10, y: 15), flippedX: flipPlant)
+                        drawSheetFrame(in: &ctx, sheet: "plant_bromeliad_sheet", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 20), screenPos: screenPos, anchor: CGPoint(x: 10, y: isWilting ? 18 : 17), flippedX: flipPlant)
                     case "orchid":
                         let fIdx = isSprout ? 2 : (isWilting ? 3 : ((plant.dewLevel > 0 || phaseShift == 1) ? 1 : 0))
-                        drawSheetFrame(in: &ctx, sheet: "plant_orchid_sheet", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 22), screenPos: screenPos, anchor: CGPoint(x: 10, y: 17), flippedX: flipPlant)
+                        drawSheetFrame(in: &ctx, sheet: "plant_orchid_sheet", frameIndex: fIdx, frameSize: CGSize(width: 20, height: 22), screenPos: screenPos, anchor: CGPoint(x: 10, y: isSprout ? 18 : (isWilting ? 20 : 21)), flippedX: flipPlant)
                     case "marimo":
                         let fIdx = isSprout ? 2 : (isWilting ? 3 : ((state.humidity >= 65 || phaseShift == 1) ? 1 : 0))
-                        drawSheetFrame(in: &ctx, sheet: "plant_marimo_sheet", frameIndex: fIdx, frameSize: CGSize(width: 18, height: 14), screenPos: screenPos, anchor: CGPoint(x: 9, y: 10), flippedX: flipPlant)
+                        drawSheetFrame(in: &ctx, sheet: "plant_marimo_sheet", frameIndex: fIdx, frameSize: CGSize(width: 18, height: 14), screenPos: screenPos, anchor: CGPoint(x: 9, y: isSprout ? 12 : 13), flippedX: flipPlant)
                     case "anubias":
                         let fIdx = isSprout ? 2 : (isWilting ? 3 : (state.isSleeping ? 0 : ((animator.tick / 10 + idx + phaseShift) % 2)))
                         drawSheetFrame(in: &ctx, sheet: "plant_anubias_sheet", frameIndex: fIdx, frameSize: CGSize(width: 22, height: 20), screenPos: screenPos, anchor: CGPoint(x: 11, y: 16), flippedX: flipPlant)
@@ -527,7 +527,7 @@ struct PixelStageView: View {
                         }
                     default:
                         let fIdx = isSprout ? 3 : (isWilting ? 4 : (state.isSleeping ? 0 : ((animator.tick / 8 + idx + phaseShift) % 3)))
-                        drawSheetFrame(in: &ctx, sheet: "plant_red_shroom_sheet", frameIndex: fIdx, frameSize: CGSize(width: 16, height: 16), screenPos: screenPos, anchor: CGPoint(x: 8, y: 13), flippedX: flipPlant)
+                        drawSheetFrame(in: &ctx, sheet: "plant_red_shroom_sheet", frameIndex: fIdx, frameSize: CGSize(width: 16, height: 16), screenPos: screenPos, anchor: CGPoint(x: 8, y: isSprout ? 13 : (isWilting ? 11 : 12)), flippedX: flipPlant)
                     }
 
                     // 湿度视觉反馈：幼苗期尚未长成叶冠不显示高处凝露滴落动画，仅成熟大植株显示

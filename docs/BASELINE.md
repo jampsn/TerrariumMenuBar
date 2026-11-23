@@ -84,6 +84,7 @@
 | **PM-12** | 边缘防穿壁 | 摆件底边若画成平底或宽弧且超过锚点下沿，置于缸前边缘时会垂出底砂斜边露在侧剖面上；Pass 3 阴影亦会穿透缸壁。 | 所有摆件底边必须收为 2:1 等距 V 形斜边；Pass 3 地面接触阴影必须裁剪于 11×11 缸底菱形内部。 |
 | **PM-13** | 存档与能耗 | 主档单文件解码失败会静默覆写丢档；`MenuBarExtra(.window)` 收起后不触发 `onDisappear`，导致 15fps `Timer` 后台空转。 | 写盘前轮转 `.bak` 备份、坏档隔离恢复；监听 `NSWindow.didResignKey/didBecomeKey` 暂停/恢复 15fps 渲染。 |
 | **PM-14** | 菜单栏窗体 | macOS `MenuBarExtra(.window)` 切换矮高度 Tab 或展开管理员面板时，容器未顶边锚定会导致窗口整体下移、上方出现透明留白。 | 根视图须设 `alignment: .top` + `.fixedSize(horizontal: false, vertical: true)`，并配合 `MenuBarWindowTopPinHelper` 锁定 `NSWindow.frame.maxY` 贴紧菜单栏下沿，只向下伸展。 |
+| **PM-15** | 精灵锚点 | 同一张植物精灵表内成熟/幼苗/枯萎帧底部实像素 `max_y` 常不一致（如卷叶蕨成熟帧 `22`、幼苗帧 `26`；兰花成熟 `21`、幼苗 `18`），若共用单一 `anchor.y` 会导致成熟株飘浮或下沉错位。 | 新增或修改精灵表后须逐帧检查 Alpha 实像素底沿 `max_y`，在 `PixelStageView` 中按帧态精确绑定 `anchor.y`；开源发布版统一保留 `Bundle.module` 明文 PNG 与符号，不启用符号剥离与 `Assets.car` 封包。 |
 
 ---
 

@@ -27,18 +27,6 @@ enum PixelAssetLoader {
         lock.unlock()
 
         let cleanName = name.replacingOccurrences(of: ".png", with: "")
-        // 1. 发布包优先从编译后的 Assets.car 加载（防直接拷贝散装 PNG），并按实际像素尺寸规范化
-        if let catalogImg = Bundle.main.image(forResource: NSImage.Name(cleanName)),
-           let cgImage = catalogImg.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-            let pixelSize = NSSize(width: cgImage.width, height: cgImage.height)
-            let image = NSImage(cgImage: cgImage, size: pixelSize)
-            lock.lock()
-            cache[name] = image
-            lock.unlock()
-            return image
-        }
-
-        // 2. 开发态 / SwiftPM 调试回退：从 Bundle.module/Pixel 解码 PNG
         guard let url = pixelBundle.url(forResource: cleanName, withExtension: "png", subdirectory: "Pixel"),
               let data = try? Data(contentsOf: url),
               let cgImage = decodePNGToCGImage(data: data) else {
