@@ -1063,9 +1063,78 @@ struct MenuBarPopoverView: View {
     }
 
     private var appVersionLabel: String {
-        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1.0"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "110"
+        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.1"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "121"
         return "v\(short) (\(build))"
+    }
+
+    @ViewBuilder
+    private var updateActionButton: some View {
+        switch state.updateStatus {
+        case .idle:
+            Button(TerrariumL10n.t("settings.update_check")) {
+                Task { await state.checkForUpdates(userInitiated: true) }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(bgCard)
+            .foregroundColor(adminAmber)
+            .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+        case .checking:
+            Text(TerrariumL10n.t("settings.update_checking"))
+                .font(.system(size: 9.5, design: .monospaced))
+                .foregroundColor(textMuted)
+        case .upToDate:
+            Button(TerrariumL10n.t("settings.update_latest")) {
+                Task { await state.checkForUpdates(userInitiated: true) }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 9.5, design: .monospaced))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(bgCard)
+            .foregroundColor(accentGreen)
+            .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+        case .available(let info):
+            Button(TerrariumL10n.t("settings.update_download", ["ver": info.version])) {
+                Task { await state.downloadAndOpenAvailableUpdate() }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(accentGreen)
+            .foregroundColor(.white)
+            .overlay(Rectangle().stroke(adminAmber, lineWidth: 1))
+        case .downloading:
+            Text(TerrariumL10n.t("settings.update_downloading"))
+                .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                .foregroundColor(adminAmber)
+        case .downloaded(let fileURL):
+            Button(TerrariumL10n.t("settings.update_opened")) {
+                NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(bgCard)
+            .foregroundColor(accentGreen)
+            .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+        case .failed:
+            Button(TerrariumL10n.t("settings.update_failed")) {
+                Task { await state.checkForUpdates(userInitiated: true) }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 9.5, design: .monospaced))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(bgCard)
+            .foregroundColor(Color(red: 0.99, green: 0.72, blue: 0.68))
+            .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+        }
     }
 
     private var isLaunchAtLoginEnabled: Bool {
@@ -1111,14 +1180,17 @@ struct MenuBarPopoverView: View {
 
                 Divider().background(borderCol)
 
-                HStack {
+                HStack(spacing: 6) {
                     Text(TerrariumL10n.t("settings.version_label"))
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(textMuted)
-                    Spacer()
+                    Spacer(minLength: 4)
                     Text("Pixel Terrarium \(appVersionLabel)")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(.system(size: 10.5, weight: .bold, design: .monospaced))
                         .foregroundColor(textMain)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    updateActionButton
                 }
 
                 HStack {

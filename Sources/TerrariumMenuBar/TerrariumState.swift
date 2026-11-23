@@ -39,6 +39,7 @@ final class TerrariumState: ObservableObject {
     @Published var hasCoolingFan: Bool = false
     @Published var isShowingBuyTankSheet: Bool = false
     @Published var isShowingSettings: Bool = false
+    @Published var updateStatus: AppUpdateStatus = .idle
     @Published var isConfirmingResetSave: Bool = false
     @Published var isConfirmingPrunePlant: Bool = false
     @Published var pendingPurchaseThermalMode: ThermalMode? = nil
@@ -159,6 +160,10 @@ final class TerrariumState: ObservableObject {
             startBackgroundScheduler()
             Task { @MainActor [weak self] in
                 await self?.refreshLocalWeatherIfNeeded(force: true)
+            }
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                await self?.checkForUpdates(userInitiated: false)
             }
         }
     }
@@ -1646,5 +1651,50 @@ final class TerrariumState: ObservableObject {
         commitStateChange()
         bannerNotice = TerrariumL10n.t("state.skin_unlocked", ["name": skin.displayName])
         return true
+    }
+
+    // MARK: - GitHub Release 更新检查与下载
+
+    func checkForUpdates(userInitiated: Bool) async {
+        if case .checking = updateStatus { return }
+        if case .downloading = updateStatus { return }
+        if userInitiated {
+            updateStatus = .checking
+        }
+
+        guard let info = await AppUpdateService.fetchLatestRelease() else {
+            if userInitiated {
+                updateStatus = .failed
+            }
+            return
+        }
+
+        let current = AppUpdateService.currentShortVersion()
+        if AppUpdateService.isNewerVersion(info.version, than: current) {
+            updateStatus = .available(info)
+            if !userInitiated && bannerNotice == nil {
+                bannerNotice = TerrariumL10n.t("state.update_available", ["ver": info.version])
+            }
+        } else if userInitiated {
+            updateStatus = .upToDate(current: current)
+        }
+    }
+
+    func downloadAndOpenAvailableUpdate() async {
+        guard case .available(let info) = updateStatus else { return }
+        guard let dmgURL = info.dmgURL, let fileName = info.dmgFileName else {
+            NSWorkspace.shared.open(info.htmlURL)
+            return
+        }
+
+        updateStatus = .downloading(version: info.version)
+        if let localURL = await AppUpdateService.downloadDMG(from: dmgURL, fileName: fileName) {
+            updateStatus = .downloaded(fileURL: localURL)
+            NSWorkspace.shared.activateFileViewerSelecting([localURL])
+            NSWorkspace.shared.open(localURL)
+        } else {
+            updateStatus = .available(info)
+            NSWorkspace.shared.open(info.htmlURL)
+        }
     }
 }
