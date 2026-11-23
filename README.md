@@ -3,7 +3,19 @@
 > A cozy pixel-art terrarium living quietly in your macOS menu bar.  
 > 一款安静栖息在 macOS 菜单栏里的治愈系像素生态缸桌面伙伴。
 
-[English](#english) | [简体中文](#简体中文)
+[English](#english) | [简体中文](#简体中文) | [繁體中文](docs/i18n/README.zh-Hant.md) | [日本語](docs/i18n/README.ja.md) | [한국어](docs/i18n/README.ko.md) | [Español](docs/i18n/README.es.md) | [Deutsch](docs/i18n/README.de.md) | [Français](docs/i18n/README.fr.md)
+
+<p align="center">
+  <img src="docs/assets/itch_cover_630x500.png" alt="Pixel Terrarium Cover" width="520" />
+</p>
+
+### 📸 Screenshots / 游戏截图
+
+| 🌿 Lush Meadow / 温润苔原缸 | 🏜️ Sunlit Desert / 暖阳沙地缸 |
+| :---: | :---: |
+| <img src="docs/assets/screenshot_meadow.png" alt="Lush Meadow" width="380" /> | <img src="docs/assets/screenshot_sand.png" alt="Sunlit Desert" width="380" /> |
+| **🌴 Tropical Rainforest / 热带雨林缸** | **🐟 Crystal Aquatic / 碧波鱼缸** |
+| <img src="docs/assets/screenshot_rainforest.png" alt="Tropical Rainforest" width="380" /> | <img src="docs/assets/screenshot_aquatic.png" alt="Crystal Aquatic" width="380" /> |
 
 ---
 
