@@ -24,7 +24,7 @@
      - `StageAnimator.swift`：精灵动画状态机、VFX 粒子预算与轻抚/气泡/露水帧驱动
      - `LocalWeatherService.swift`：本地实时气温联动服务
      - `PixelAssetLoader.swift` & `Resources/Pixel/`：像素精灵表与静态图资产加载
-  3. `Sources/TerrariumCoreTestRunner/`：无头单元测试运行器（`main.swift`，当前 24 项核心测试）
+  3. `Sources/TerrariumCoreTestRunner/`：无头单元测试运行器（`main.swift`，当前 25 项核心测试）
   4. `build_app.sh`：原生 `.app` 编译、资源拷贝（含 `AppIcon.icns`）与签名打包脚本（默认输出 `/tmp/terrarium-build/TerrariumMenuBar.app`）
 
 ---
@@ -87,6 +87,7 @@
 | **PM-14** | 菜单栏窗体 | macOS `MenuBarExtra(.window)` 切换矮高度 Tab 或展开管理员面板时，容器未顶边锚定会导致窗口整体下移、上方出现透明留白。 | 根视图须设 `alignment: .top` + `.fixedSize(horizontal: false, vertical: true)`，并配合 `MenuBarWindowTopPinHelper` 锁定 `NSWindow.frame.maxY` 贴紧菜单栏下沿，只向下伸展。 |
 | **PM-15** | 精灵锚点 | 同一张植物精灵表内成熟/幼苗/枯萎帧底部实像素 `max_y` 常不一致（如卷叶蕨成熟帧 `22`、幼苗帧 `26`；兰花成熟 `21`、幼苗 `18`），若共用单一 `anchor.y` 会导致成熟株飘浮或下沉错位。 | 新增或修改精灵表后须逐帧检查 Alpha 实像素底沿 `max_y`，在 `PixelStageView` 中按帧态精确绑定 `anchor.y`；开源发布版统一保留 `Bundle.module` 明文 PNG 与符号，不启用符号剥离与 `Assets.car` 封包。 |
 | **PM-16** | 多语言与存档 | 枚举 `TerrariumBiome`/`ThermalMode`/`SceneAtmosphere` 与 `CritterPersistentState.personality` 以中文作为 `save.json` 持久化与数值匹配键，直接改 `rawValue` 会导致老存档坏档；SwiftPM 核心库资源在独立 `.app` 中位于 `Contents/Resources/TerrariumMenuBar_TerrariumCore.bundle`。 | 持久化键与性格逻辑匹配键恒定保留中文原值，展示层统一通过 `TerrariumL10n` + JSON 命名占位符映射；`TerrariumL10n` 须优先探测 `Bundle.main` 内资源包再回落 `Bundle.module`，`build_app.sh` 同步拷贝该 bundle 并声明 `CFBundleLocalizations`。 |
+| **PM-17** | 沙地过湿与温标 | 沙漠植物在高湿（`humidity >= 80%`）下因涝渍进入 `.wilting`，若沿用通用词条 `"缺水"` 会令玩家误判并继续喷水；且 `v0.3.0` 新增植物（生石花/龙舌兰等）若漏入 `updatePlants` 生态分类会套错阈值；华氏度转换若未区分绝对温度与温差（如 `-1°C`/`+6°C`/`-4°C`），会导致温差数值错按 `+32` 换算。 | `PlantStage.wilting` 必须按 `TerrariumBiome` 分流显示（沙地=`过湿`、水域=`缺氧`、苔原/雨林=`缺水`），`updatePlants` 统一结合 `instance.biome` 与全 21 种植物 ID 判定；内部仿真与存档恒定使用摄氏度整数，`TerrariumL10n` 在华氏模式下自动识别温差（`Δ°F = round(Δ°C * 1.8)`）与绝对温度（`°F = round(°C * 1.8 + 32)`）；底部状态栏日常小贴士（`DailyTipsFrequency`：30s/1m/5m/关闭）须遵循 `操作反馈 > 休眠/开荒引导 > 生态紧急预警 > 常态轮播` 优先级，绝不遮盖即时交互反馈。 |
 
 ---
 

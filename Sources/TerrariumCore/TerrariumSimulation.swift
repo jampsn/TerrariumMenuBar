@@ -721,9 +721,15 @@ public enum TerrariumSimulation {
         for idx in instance.plants.indices {
             var p = instance.plants[idx]
             if p.stage == .withered { continue }
-            let isDesertPlant = (p.speciesID == "succulent" || p.speciesID == "cactus" || p.speciesID == "aloe")
-            let isRainforestPlant = (p.speciesID == "monstera" || p.speciesID == "bromeliad" || p.speciesID == "orchid")
-            let isAquaticPlant = (p.speciesID == "marimo" || p.speciesID == "anubias" || p.speciesID == "lotus")
+            let isDesertPlant = (instance.biome == .sand
+                || p.speciesID == "succulent" || p.speciesID == "cactus" || p.speciesID == "aloe"
+                || p.speciesID == "lithops" || p.speciesID == "agave")
+            let isRainforestPlant = (!isDesertPlant && (instance.biome == .rainforest
+                || p.speciesID == "monstera" || p.speciesID == "bromeliad" || p.speciesID == "orchid"
+                || p.speciesID == "pitcher_plant" || p.speciesID == "calathea"))
+            let isAquaticPlant = (!isDesertPlant && !isRainforestPlant && (instance.biome == .aquatic
+                || p.speciesID == "marimo" || p.speciesID == "anubias" || p.speciesID == "lotus"
+                || p.speciesID == "vallisneria" || p.speciesID == "red_ludwigia"))
             let isUnhealthy: Bool
             if isDesertPlant {
                 isUnhealthy = (instance.humidity >= 80)

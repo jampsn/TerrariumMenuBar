@@ -31,6 +31,9 @@ final class TerrariumState: ObservableObject {
     @Published var activeContainerName: String = TerrariumL10n.t("tank.default_name", ["biome": TerrariumBiome.meadow.localizedShortName, "index": "1"])
     @Published var languagePreference: AppLanguagePreference = TerrariumL10n.shared.preference
     @Published var activeLanguage: SupportedLanguage = TerrariumL10n.shared.currentLanguage
+    @Published var temperatureUnit: TemperatureUnit = TerrariumL10n.shared.currentTemperatureUnit
+    @Published var tipsFrequency: DailyTipsFrequency = TerrariumL10n.shared.currentTipsFrequency
+    @Published var currentTipIndex: Int = Int.random(in: 0..<13)
     @Published var thermalMode: ThermalMode = .natural
     @Published var hasHeatLamp: Bool = false
     @Published var hasCoolingFan: Bool = false
@@ -99,6 +102,7 @@ final class TerrariumState: ObservableObject {
     private var lastStartleAtByKind: [CritterKind: Date] = [:]
     private var titleTapCount: Int = 0
     private var lastTitleTapAt: Date = .distantPast
+    private var lastTipRotateAt: Date = Date()
 
     init(persistence: TerrariumPersistence = TerrariumPersistence(), startScheduler: Bool = true) {
         self.persistence = persistence
@@ -262,6 +266,38 @@ final class TerrariumState: ObservableObject {
         syncPublishedFromSaveData()
     }
 
+    func setTemperatureUnit(_ unit: TemperatureUnit) {
+        TerrariumL10n.shared.temperatureUnit = unit
+        temperatureUnit = TerrariumL10n.shared.currentTemperatureUnit
+        syncPublishedFromSaveData()
+    }
+
+    func toggleTemperatureUnit() {
+        let next: TemperatureUnit = (temperatureUnit == .celsius) ? .fahrenheit : .celsius
+        setTemperatureUnit(next)
+    }
+
+    func setTipsFrequency(_ freq: DailyTipsFrequency) {
+        TerrariumL10n.shared.tipsFrequency = freq
+        tipsFrequency = TerrariumL10n.shared.currentTipsFrequency
+        lastTipRotateAt = Date()
+        syncPublishedFromSaveData()
+    }
+
+    func cycleNextDailyTip() {
+        if bannerNotice != nil {
+            bannerNotice = nil
+        }
+        let total = TerrariumL10n.dailyTipKeys(for: currentBiome).count
+        currentTipIndex = (currentTipIndex + 1) % max(1, total)
+        lastTipRotateAt = Date()
+    }
+
+    var isShowingDailyTip: Bool {
+        guard bannerNotice == nil, !isSleeping, !plants.isEmpty else { return false }
+        return tipsFrequency != .off
+    }
+
     func isAchievementEquipped(_ achID: String) -> Bool {
         let unlocked = Set(unlockedAchievementIDs)
         if let eqID = equippedTitleID, unlocked.contains(eqID) {
@@ -311,6 +347,25 @@ final class TerrariumState: ObservableObject {
         if activeDisplayCritters.isEmpty {
             return TerrariumL10n.t("state.status.all_stowed")
         }
+
+        // P2: 生态紧急预警（智能上下文 Tip）
+        if tipsFrequency != .off {
+            if currentBiome == .sand && (humidity >= 80 || plants.contains(where: { $0.stage == .wilting })) {
+                return TerrariumL10n.t("tips.alert.sand_wet")
+            }
+            if currentBiome == .aquatic && plants.contains(where: { $0.stage == .wilting }) {
+                return TerrariumL10n.t("tips.alert.aquatic_o2")
+            }
+            if plants.contains(where: { $0.stage == .wilting }) {
+                return TerrariumL10n.t("tips.alert.land_dry")
+            }
+            if foodBowlPortions == 0 && activeDisplayCritters.contains(where: { $0.hunger >= 60.0 }) {
+                return TerrariumL10n.t("tips.alert.hungry")
+            }
+            // P3: 常态轮播日常生态小贴士
+            return TerrariumL10n.dailyTip(for: currentBiome, index: currentTipIndex)
+        }
+
         if foodBowlPortions > 0 {
             return TerrariumL10n.t("state.status.food_bowl", [
                 "cur": "\(foodBowlPortions)",
@@ -553,6 +608,15 @@ final class TerrariumState: ObservableObject {
 
         if updateLastSavedAt {
             saveData.lastSavedAt = now
+        }
+        if let interval = tipsFrequency.intervalSeconds,
+           now.timeIntervalSince(lastTipRotateAt) >= interval {
+            if bannerNotice != nil {
+                bannerNotice = nil
+            }
+            let total = TerrariumL10n.dailyTipKeys(for: activeInstance.biome).count
+            currentTipIndex = (currentTipIndex + 1) % max(1, total)
+            lastTipRotateAt = now
         }
         syncPublishedFromSaveData(now: now)
         if activeCrittersChanged {
@@ -876,8 +940,8 @@ final class TerrariumState: ObservableObject {
         codexName(for: speciesID)
     }
 
-    static func stageLabel(for stage: PlantStage) -> String {
-        stage.localizedName
+    static func stageLabel(for stage: PlantStage, biome: TerrariumBiome? = nil) -> String {
+        stage.localizedName(for: biome)
     }
 
     func updateCritterCoord(kind: CritterKind, coord: GridCoord) {

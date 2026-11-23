@@ -123,7 +123,21 @@ public enum PlantStage: String, Codable, Equatable {
     case withered
 
     public var localizedName: String {
-        TerrariumL10n.t("stage.\(rawValue)")
+        localizedName(for: nil)
+    }
+
+    public func localizedName(for biome: TerrariumBiome?) -> String {
+        if self == .wilting {
+            switch biome {
+            case .sand:
+                return TerrariumL10n.t("stage.wilting_sand")
+            case .aquatic:
+                return TerrariumL10n.t("stage.wilting_aquatic")
+            default:
+                return TerrariumL10n.t("stage.wilting")
+            }
+        }
+        return TerrariumL10n.t("stage.\(rawValue)")
     }
 }
 

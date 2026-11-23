@@ -112,13 +112,22 @@ struct MenuBarPopoverView: View {
             }
             .padding(12)
 
-            // 底部双层状态栏：上层完整信息提示条 + 下层系统点数与操作按钮
+            // 底部双层状态栏：上层完整信息提示条（日常小贴士模式下点击可立即切换下一条）+ 下层系统点数与操作按钮
             VStack(alignment: .leading, spacing: 5) {
-                Text(state.statusText)
-                    .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundColor(textMuted)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    if state.tipsFrequency != .off {
+                        state.cycleNextDailyTip()
+                    }
+                } label: {
+                    Text(state.statusText)
+                        .font(.system(size: 10.5, design: .monospaced))
+                        .foregroundColor(textMuted)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .help(state.tipsFrequency != .off ? TerrariumL10n.t("tips.click_next_help") : "")
 
                 HStack(spacing: 6) {
                     Text(state.isSleeping
@@ -282,7 +291,7 @@ struct MenuBarPopoverView: View {
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                             Spacer(minLength: 3)
-                            Text("\(container.instance.temperature)°")
+                            Text(state.temperatureUnit.format(celsius: container.instance.temperature, includeUnitLetter: false))
                                 .font(.system(size: 9.5, design: .monospaced))
                                 .opacity(0.85)
                                 .fixedSize(horizontal: true, vertical: false)
@@ -398,7 +407,7 @@ struct MenuBarPopoverView: View {
                 HStack(spacing: 6) {
                     Text(TerrariumL10n.t("ui.plant.title", [
                         "name": TerrariumState.displayName(forPlantSpecies: selPlant.speciesID),
-                        "stage": TerrariumState.stageLabel(for: selPlant.stage)
+                        "stage": TerrariumState.stageLabel(for: selPlant.stage, biome: state.currentBiome)
                     ]))
                         .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
                         .foregroundColor(textMain)
@@ -585,21 +594,30 @@ struct MenuBarPopoverView: View {
                             .minimumScaleFactor(0.72)
                         Spacer(minLength: 2)
                         if state.thermalMode != .natural && targetTemp != state.temperature {
-                            Text("→\(targetTemp)°")
+                            Text("→\(state.temperatureUnit.format(celsius: targetTemp, includeUnitLetter: false))")
                                 .font(.system(size: 9.5, design: .monospaced))
                                 .foregroundColor(state.thermalMode == .heating ? Color.orange : Color.cyan)
                                 .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
                         }
-                        Text("\(state.temperature)°C")
-                            .bold()
-                            .foregroundColor(textMain)
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
+                        Button {
+                            state.toggleTemperatureUnit()
+                        } label: {
+                            Text(state.temperatureUnit.format(celsius: state.temperature))
+                                .bold()
+                                .foregroundColor(textMain)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        .buttonStyle(.plain)
+                        .help(TerrariumL10n.t("sensor.temp_unit_help"))
                     }
                     HStack(spacing: 3) {
                         let tempSubtitle = (state.localOutdoorTempC != nil)
-                            ? TerrariumL10n.t("sensor.temp_sub_outdoor", ["hint": state.tempHint, "temp": "\(state.localOutdoorTempC!)"])
+                            ? TerrariumL10n.t("sensor.temp_sub_outdoor", [
+                                "hint": state.tempHint,
+                                "temp": "\(state.temperatureUnit.convert(celsius: state.localOutdoorTempC!))"
+                            ])
                             : state.tempHint
                         Text(tempSubtitle)
                             .font(.system(size: 9.5, design: .monospaced))
@@ -1052,6 +1070,58 @@ struct MenuBarPopoverView: View {
                     }
                     .menuStyle(.borderlessButton)
                     .fixedSize()
+                }
+
+                HStack {
+                    Text(TerrariumL10n.t("settings.temp_unit_label"))
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(textMuted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Spacer(minLength: 6)
+                    HStack(spacing: 4) {
+                        ForEach(TemperatureUnit.allCases) { unit in
+                            let isSelected = (state.temperatureUnit == unit)
+                            Button(unit.localizedButtonLabel) {
+                                state.setTemperatureUnit(unit)
+                            }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(isSelected ? accentGreen : bgCard)
+                            .foregroundColor(isSelected ? .white : textMuted)
+                            .overlay(Rectangle().stroke(isSelected ? adminAmber : borderCol, lineWidth: 1))
+                        }
+                    }
+                }
+
+                HStack {
+                    Text(TerrariumL10n.t("settings.tips_freq_label"))
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(textMuted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Spacer(minLength: 6)
+                    HStack(spacing: 4) {
+                        ForEach(DailyTipsFrequency.allCases) { freq in
+                            let isSelected = (state.tipsFrequency == freq)
+                            Button(freq.localizedButtonLabel) {
+                                state.setTipsFrequency(freq)
+                            }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(isSelected ? accentGreen : bgCard)
+                            .foregroundColor(isSelected ? .white : textMuted)
+                            .overlay(Rectangle().stroke(isSelected ? adminAmber : borderCol, lineWidth: 1))
+                        }
+                    }
                 }
 
                 HStack {

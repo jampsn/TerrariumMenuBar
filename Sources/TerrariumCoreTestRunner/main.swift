@@ -25,6 +25,7 @@ private func runTest(_ name: String, _ block: () -> Void) {
 // MARK: - 独立多生态缸、零起点成长与食盆槽位寻路测试
 
 TerrariumL10n.setOverrideLanguage(.zhHans)
+TerrariumL10n.setOverrideTemperatureUnit(.celsius)
 
 runTest("test_day0EmptyStart_startsWithNoPlantsCrittersOrCodex") {
     let save = TerrariumSaveData()
@@ -694,7 +695,8 @@ runTest("test_i18n_all8LanguagesKeyAndPlaceholderParity") {
 }
 
 runTest("test_i18n_runtimeSwitching_persistenceCompatibility_andSystemResolution") {
-    defer { TerrariumL10n.setOverrideLanguage(.zhHans) }
+    defer { TerrariumL10n.setOverrideLanguage(.zhHans)
+TerrariumL10n.setOverrideTemperatureUnit(.celsius) }
 
     check(TerrariumL10n.resolveSystemLanguage(preferredLanguages: ["zh-Hant-TW"]) == .zhHant, "zh-Hant-TW 应解析为繁体中文")
     check(TerrariumL10n.resolveSystemLanguage(preferredLanguages: ["zh-HK", "en"]) == .zhHant, "zh-HK 应解析为繁体中文")
@@ -787,6 +789,71 @@ runTest("test_i18n_runtimeSwitching_persistenceCompatibility_andSystemResolution
         let decoded = try? decoder.decode(TerrariumSaveData.self, from: Data(legacyV3JSON.utf8))
         check(decoded?.schemaVersion == 5 && decoded?.ecoPoints == 18 && decoded?.containers.count == 1, "\(testLang.rawValue) 下历史 v3 中文存档应无损迁移")
     }
+}
+
+runTest("test_plantWiltingByBiome_andTemperatureUnitConversion") {
+    defer {
+        TerrariumL10n.setOverrideLanguage(.zhHans)
+        TerrariumL10n.setOverrideTemperatureUnit(.celsius)
+    }
+
+    // 1. 沙地缸全 5 种沙漠植物在高湿（>=80%）下进入 .wilting（过湿），在干燥（<80%）下恢复健康
+    let desertSpecies = ["succulent", "cactus", "aloe", "lithops", "agave"]
+    for sp in desertSpecies {
+        var sandInst = TerrariumInstanceState.empty(biome: .sand)
+        sandInst.humidity = 98
+        sandInst.plants = [PlantInstance(speciesID: sp, coord: GridCoord(col: 2, row: 2), stage: .mature)]
+        TerrariumSimulation.updatePlants(instance: &sandInst, dt: 7500)
+        check(sandInst.plants[0].stage == .wilting, "沙漠植物 \(sp) 在 98% 湿度下应进入过湿状态 (.wilting)")
+
+        sandInst.humidity = 35
+        TerrariumSimulation.updatePlants(instance: &sandInst, dt: 300)
+        check(sandInst.plants[0].stage == .mature, "沙漠植物 \(sp) 湿度降至 35% 后应恢复为健康成株 (.mature)")
+    }
+
+    // 2. 不同生态缸的 .wilting 本地化文案应精准区分：沙地=过湿，生态水=缺氧，苔原/雨林=缺水
+    TerrariumL10n.setOverrideLanguage(.zhHans)
+    check(PlantStage.wilting.localizedName(for: .sand) == "过湿", "沙地缸 wilting 应显示'过湿'")
+    check(PlantStage.wilting.localizedName(for: .aquatic) == "缺氧", "生态水缸 wilting 应显示'缺氧'")
+    check(PlantStage.wilting.localizedName(for: .meadow) == "缺水", "苔原缸 wilting 应显示'缺水'")
+    check(PlantStage.wilting.localizedName(for: .rainforest) == "缺水", "雨林缸 wilting 应显示'缺水'")
+
+    TerrariumL10n.setOverrideLanguage(.en)
+    check(PlantStage.wilting.localizedName(for: .sand) == "Overwatered", "英文沙地缸 wilting 应显示'Overwatered'")
+    check(PlantStage.wilting.localizedName(for: .aquatic) == "Low O₂", "英文水缸 wilting 应显示'Low O₂'")
+    check(PlantStage.wilting.localizedName(for: .meadow) == "Wilting", "英文苔原缸 wilting 应显示'Wilting'")
+
+    // 3. 摄氏 (°C) 与华氏 (°F) 转换断言（含绝对温度与温差 Δ）
+    TerrariumL10n.setOverrideLanguage(.zhHans)
+    TerrariumL10n.setOverrideTemperatureUnit(.celsius)
+    check(TemperatureUnit.celsius.format(celsius: 22) == "22°C", "22°C 格式化断言")
+    check(TerrariumL10n.t("codex.agave.cond") == "芦荟≥1 + 温暖(≥25°C)", "摄氏模式下龙舌兰图鉴条件应为 25°C")
+
+    TerrariumL10n.setOverrideTemperatureUnit(.fahrenheit)
+    check(TemperatureUnit.fahrenheit.format(celsius: 22) == "72°F", "22°C 应换算为 72°F")
+    check(TemperatureUnit.fahrenheit.format(celsius: 25, includeUnitLetter: false) == "77°", "25°C 简写应换算为 77°")
+    check(TerrariumL10n.t("codex.agave.cond") == "芦荟≥1 + 温暖(≥77°F)", "华氏模式下龙舌兰图鉴 25°C 应自动换算为 77°F")
+    check(TerrariumL10n.t("decor.boulder.desc").contains("-2°F"), "华氏模式下青苔巨石温差 -1°C 应换算为 -2°F")
+    check(TerrariumL10n.t("sensor.heat_help_on", ["temp": "28"]).contains("+11°F") && TerrariumL10n.t("sensor.heat_help_on", ["temp": "28"]).contains("82°F"), "华氏模式下加热灯提示应同时换算温差 +6°C->+11°F 与目标温度 28°C->82°F")
+    check(TerrariumL10n.t("sensor.fan_help_on", ["temp": "18"]).contains("-7°F") && TerrariumL10n.t("sensor.fan_help_on", ["temp": "18"]).contains("64°F"), "华氏模式下降温扇提示应同时换算温差 -4°C->-7°F 与目标温度 18°C->64°F")
+    check(TerrariumL10n.t("sensor.temp_unit_help") == "点击切换摄氏 (°C) / 华氏 (°F)", "不含数字前缀的 (°C) 提示标签不应被错误替换")
+
+    // 4. 日常小贴士（Daily Tips）池与频率设定断言
+    check(DailyTipsFrequency.fast30s.intervalSeconds == 30.0, "30s 档位轮播周期应为 30 秒")
+    check(DailyTipsFrequency.standard1m.intervalSeconds == 60.0, "1m 档位轮播周期应为 60 秒")
+    check(DailyTipsFrequency.relaxed5m.intervalSeconds == 300.0, "5m 档位轮播周期应为 300 秒")
+    check(DailyTipsFrequency.off.intervalSeconds == nil, "关闭档位轮播周期应为 nil")
+
+    for biome in TerrariumBiome.allCases {
+        let keys = TerrariumL10n.dailyTipKeys(for: biome)
+        check(keys.count == 13, "\(biome.rawValue) 应包含 12 条通用 + 1 条专属共 13 条日常小贴士")
+        for idx in 0..<keys.count {
+            let tip = TerrariumL10n.dailyTip(for: biome, index: idx)
+            check(tip.contains("💡") && !tip.hasPrefix("tips."), "\(biome.rawValue) 小贴士 #\(idx) 翻译异常: \(tip)")
+        }
+    }
+    check(TerrariumL10n.dailyTip(for: .meadow, index: 10).contains("72°F"), "华氏模式下第 11 条小贴士中的 22°C 示例应自动换算为 72°F")
+    check(TerrariumL10n.t("tips.alert.sand_wet").contains("加热灯") && TerrariumL10n.t("tips.alert.sand_wet").contains("蒸发"), "沙地过湿预警贴士应与物理引擎一致，提示开启加热灯加速蒸发")
 }
 
 print("\nSummary: \(passedCount) passed, \(failedCount) failed.")
