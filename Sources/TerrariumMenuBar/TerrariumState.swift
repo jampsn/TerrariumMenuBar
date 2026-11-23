@@ -28,7 +28,9 @@ final class TerrariumState: ObservableObject {
     @Published var currentBiome: TerrariumBiome = .meadow
     @Published var containers: [TerrariumContainer] = []
     @Published var activeContainerID: UUID = UUID()
-    @Published var activeContainerName: String = "苔原缸 #1"
+    @Published var activeContainerName: String = TerrariumL10n.t("tank.default_name", ["biome": TerrariumBiome.meadow.localizedShortName, "index": "1"])
+    @Published var languagePreference: AppLanguagePreference = TerrariumL10n.shared.preference
+    @Published var activeLanguage: SupportedLanguage = TerrariumL10n.shared.currentLanguage
     @Published var thermalMode: ThermalMode = .natural
     @Published var hasHeatLamp: Bool = false
     @Published var hasCoolingFan: Bool = false
@@ -67,7 +69,7 @@ final class TerrariumState: ObservableObject {
     @Published var showIsoGridDebug: Bool = false
     @Published var localOutdoorTempC: Int? = nil
     @Published var localCityName: String? = nil
-    @Published var codexMilestoneTitle: String = "🔍 探索萌新"
+    @Published var codexMilestoneTitle: String = TerrariumConfig.codexMilestoneTitle(unlockedCount: 0)
     @Published var unlockedFrameSkinIDs: [String] = [TankFrameSkin.classic.rawValue]
     @Published var activeFrameSkin: TankFrameSkin = .classic
     @Published var isResonanceActive: Bool = false
@@ -119,14 +121,14 @@ final class TerrariumState: ObservableObject {
 
             if !migratedStowed.isEmpty {
                 let stowedNames = Self.critterNames(for: migratedStowed)
-                self.bannerNotice = "⚖️ 斗鱼领地独立：已将同缸「\(stowedNames)」安全移入生物仓（可新购鱼缸分养）"
+                self.bannerNotice = TerrariumL10n.t("state.betta_stowed", ["names": stowedNames])
             } else if summary.totalEarnedEcoPoints > 0 {
-                self.bannerNotice = "欢迎回来 · 离线产出 +\(summary.totalEarnedEcoPoints) 生态点"
+                self.bannerNotice = TerrariumL10n.t("state.welcome_offline", ["pts": "\(summary.totalEarnedEcoPoints)"])
             }
             if !summary.newlyUnlockedCodexIDs.isEmpty {
                 self.hasWeatherEvent = true
                 let names = Self.codexNames(for: summary.newlyUnlockedCodexIDs)
-                self.appendEventMessage("离线发现新物种：\(names)")
+                self.appendEventMessage(TerrariumL10n.t("state.offline_codex", ["names": names]))
             }
             for idx in self.saveData.containers.indices {
                 var inst = self.saveData.containers[idx].instance
@@ -241,68 +243,104 @@ final class TerrariumState: ObservableObject {
         return .normal
     }
 
+    var localizedLocalCityName: String {
+        if let city = localCityName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !city.isEmpty,
+           city != "本地" {
+            return city
+        }
+        return TerrariumL10n.t("sensor.local_fallback")
+    }
+
+    func setLanguagePreference(_ pref: AppLanguagePreference) {
+        TerrariumL10n.shared.preference = pref
+        languagePreference = pref
+        activeLanguage = TerrariumL10n.shared.currentLanguage
+        bannerNotice = nil
+        eventMessage = nil
+        hasWeatherEvent = false
+        syncPublishedFromSaveData()
+    }
+
+    func isAchievementEquipped(_ achID: String) -> Bool {
+        let unlocked = Set(unlockedAchievementIDs)
+        if let eqID = equippedTitleID, unlocked.contains(eqID) {
+            return eqID == achID
+        }
+        return TerrariumConfig.defaultAchievements.last(where: { unlocked.contains($0.id) })?.id == achID
+    }
+
     var menuBarTooltip: String {
-        let prefix = isSleeping ? "[休眠] " : ""
-        return "\(prefix)\(currentBiome.rawValue) · \(temperature)°C · 湿度\(humidity)% · 食盆\(foodBowlPortions)/\(TerrariumConfig.maxFoodPortions) · 住民\(activeDisplayCritters.count)"
+        let prefix = isSleeping ? TerrariumL10n.t("state.tooltip_sleep_prefix") : ""
+        let humLabel = TerrariumL10n.t(currentBiome == .aquatic ? "sensor.oxygen" : "sensor.humidity")
+        let bowlLabel = TerrariumL10n.t(currentBiome == .aquatic ? "sensor.feeding_ring" : "sensor.food_bowl")
+        let critLabel = TerrariumL10n.t("sensor.critters_count", ["count": "\(activeDisplayCritters.count)"])
+        return TerrariumL10n.t("state.tooltip", [
+            "prefix": prefix,
+            "biome": currentBiome.localizedName,
+            "temp": "\(temperature)",
+            "humLabel": humLabel,
+            "hum": "\(humidity)",
+            "bowlLabel": bowlLabel,
+            "cur": "\(foodBowlPortions)",
+            "max": "\(TerrariumConfig.maxFoodPortions)",
+            "critLabel": critLabel
+        ])
     }
 
     var statusText: String {
         if let notice = bannerNotice { return notice }
-        if isSleeping { return "休眠盖已合上 · 暂停消耗与演替" }
+        if isSleeping { return TerrariumL10n.t("state.status.sleep") }
 
         // Day 0 ~ Tier 2 诗意渐进引导
         if plants.isEmpty {
             switch currentBiome {
             case .meadow:
-                return humidity < 45
-                    ? "干涸裸土 · 试着「喷水加湿」唤醒沉睡孢子"
-                    : "土壤已润泽 · 第一抹新绿即将破土而出..."
+                return TerrariumL10n.t(humidity < 45 ? "state.status.bare_meadow" : "state.status.wet_meadow")
             case .sand:
-                return "金色裸沙待唤醒 · 静候耐旱多肉萌芽"
+                return TerrariumL10n.t("state.status.bare_sand")
             case .rainforest:
-                return humidity < 60
-                    ? "雨林表土待润泽 · 请「喷水加湿」催生龟背竹"
-                    : "热带湿气充沛 · 第一株龟背竹即将展叶..."
+                return TerrariumL10n.t(humidity < 60 ? "state.status.bare_rainforest" : "state.status.wet_rainforest")
             case .aquatic:
-                return humidity < 55
-                    ? "水质溶氧待激活 · 请「换水打氧」催生第一株莫斯藻球"
-                    : "水体溶氧充足 · 莫斯藻球即将萌发..."
+                return TerrariumL10n.t(humidity < 55 ? "state.status.bare_aquatic" : "state.status.oxy_aquatic")
             }
         }
         if critters.isEmpty {
-            return "幼苗已苏醒 · 积攒生态点前往「生物」领养第一位居民吧"
+            return TerrariumL10n.t("state.status.need_critters")
         }
         if activeDisplayCritters.isEmpty {
-            return "当前生态箱居民已入仓 · 可在「生物」切换入缸展示"
+            return TerrariumL10n.t("state.status.all_stowed")
         }
         if foodBowlPortions > 0 {
-            return "🥣 食盆余粮 \(foodBowlPortions)/\(TerrariumConfig.maxFoodPortions) · 小动物自动前往进食中"
+            return TerrariumL10n.t("state.status.food_bowl", [
+                "cur": "\(foodBowlPortions)",
+                "max": "\(TerrariumConfig.maxFoodPortions)"
+            ])
         }
         if humidity >= TerrariumConfig.dewHeavyHumidityThreshold && currentBiome == .meadow {
-            return "💧 高湿充沛 · 植物叶片凝结晶莹露珠"
+            return TerrariumL10n.t("state.status.high_dew")
         }
         if humidity >= TerrariumConfig.dewLightHumidityThreshold && currentBiome == .meadow {
-            return "🌿 空气温润 · 叶尖挂上微露"
+            return TerrariumL10n.t("state.status.mild_dew")
         }
-        return "生态平稳运行中 · 点击小动物可趣味互动"
+        return TerrariumL10n.t("state.status.steady")
     }
 
     var tempHint: String {
         let opt = TerrariumConfig.optimalTempRange(for: currentBiome)
-        if temperature < opt.lowerBound { return "偏凉" }
-        if temperature > opt.upperBound { return "偏暖" }
-        return "适宜"
+        if temperature < opt.lowerBound { return TerrariumL10n.t("sensor.temp_cool") }
+        if temperature > opt.upperBound { return TerrariumL10n.t("sensor.temp_warm") }
+        return TerrariumL10n.t("sensor.temp_optimal")
     }
 
     var humHint: String {
         let opt = TerrariumConfig.optimalHumidityRange(for: currentBiome)
         if currentBiome == .aquatic {
-            if humidity < opt.lowerBound { return "缺氧" }
-            return "溶氧足"
+            return TerrariumL10n.t(humidity < opt.lowerBound ? "sensor.hum_low_o2" : "sensor.hum_ok_o2")
         }
-        if humidity < opt.lowerBound { return "偏干" }
-        if humidity > opt.upperBound { return "偏湿" }
-        return "适宜"
+        if humidity < opt.lowerBound { return TerrariumL10n.t("sensor.hum_dry") }
+        if humidity > opt.upperBound { return TerrariumL10n.t("sensor.hum_wet") }
+        return TerrariumL10n.t("sensor.hum_optimal")
     }
 
     // MARK: - 管理员模式切换
@@ -315,9 +353,9 @@ final class TerrariumState: ObservableObject {
             adminVirtualNowOffset = 0
             adminSimulatedElapsedSeconds = 0
             saveData.lastSavedAt = Date()
-            bannerNotice = "已退出管理员模式，恢复自然演进"
+            bannerNotice = TerrariumL10n.t("state.admin_off")
         } else {
-            bannerNotice = "已开启管理员模式（仅本次运行有效）"
+            bannerNotice = TerrariumL10n.t("state.admin_on")
         }
     }
 
@@ -340,7 +378,7 @@ final class TerrariumState: ObservableObject {
         }
         RunLoop.main.add(timer, forMode: .common)
         adminSpeedTimer = timer
-        bannerNotice = "⏩ 管理员加速已设为 \(Int(scale))x（独立虚拟时钟，不污染真实存档时间）"
+        bannerNotice = TerrariumL10n.t("state.admin_speed_set", ["scale": "\(Int(scale))"])
     }
 
     func fastForwardDebug(seconds: TimeInterval) {
@@ -354,7 +392,11 @@ final class TerrariumState: ObservableObject {
         let gainedPts = saveData.ecoPoints - beforePts
         let newPlants = max(0, activeInstance.plants.count - beforePlants)
         let label = seconds >= 3600 ? "+\(Int(seconds / 3600))h" : "+\(Int(seconds / 60))m"
-        bannerNotice = "⏩ 快进 \(label) 完成：生态点 +\(gainedPts)，萌发 +\(newPlants) 株"
+        bannerNotice = TerrariumL10n.t("state.admin_ff", [
+            "label": label,
+            "pts": "\(gainedPts)",
+            "plants": "\(newPlants)"
+        ])
     }
 
     func toggleAdminMode() {
@@ -469,16 +511,22 @@ final class TerrariumState: ObservableObject {
                 activeCrittersChanged = true
             }
             if isCurrentActive && summary.spawnedPlantsCount > 0 {
-                bannerNotice = "🌱 「\(container.customName)」自然萌发了 \(summary.spawnedPlantsCount) 株新植物"
+                bannerNotice = TerrariumL10n.t("state.bg_plants_spawned", [
+                    "tank": container.customName,
+                    "count": "\(summary.spawnedPlantsCount)"
+                ])
             }
             if !summary.arrivedCritters.isEmpty {
                 let names = Self.critterNames(for: summary.arrivedCritters)
-                bannerNotice = "🐾 「\(names)」现身于 \(container.customName)"
+                bannerNotice = TerrariumL10n.t("state.bg_visitor_appeared", [
+                    "names": names,
+                    "tank": container.customName
+                ])
             }
             if !summary.settledCritters.isEmpty {
                 let names = Self.critterNames(for: summary.settledCritters)
                 hasWeatherEvent = true
-                appendEventMessage("「\(names)」已正式定居！")
+                appendEventMessage(TerrariumL10n.t("state.bg_visitor_settled", ["names": names]))
             }
             newCodexAll.append(contentsOf: summary.newlyUnlockedCodexIDs)
 
@@ -486,7 +534,10 @@ final class TerrariumState: ObservableObject {
                 TerrariumSimulation.applyWeatherEvent(ev, to: &inst, now: now)
                 if isCurrentActive {
                     hasWeatherEvent = true
-                    appendEventMessage("\(ev.title)：\(ev.effectText)")
+                    appendEventMessage(TerrariumL10n.t("state.weather_pair", [
+                        "title": ev.title,
+                        "effect": ev.effectText
+                    ]))
                 }
             }
             saveData.containers[idx].instance = inst
@@ -497,7 +548,7 @@ final class TerrariumState: ObservableObject {
         if !newCodexAll.isEmpty {
             hasWeatherEvent = true
             let names = Self.codexNames(for: newCodexAll)
-            appendEventMessage("图鉴新解锁：\(names)")
+            appendEventMessage(TerrariumL10n.t("state.codex_unlocked", ["names": names]))
         }
 
         if updateLastSavedAt {
@@ -541,7 +592,7 @@ final class TerrariumState: ObservableObject {
                 inst.plantPulseSeconds = 0
                 if let firstPlant = TerrariumSimulation.attemptRandomPlantSpawn(instance: &inst) {
                     unlockCodexIfNeeded(firstPlant.speciesID, bonus: TerrariumConfig.codexRewardPoints(for: firstPlant.speciesID))
-                    bannerNotice = "🌱 第一抹生命「\(Self.codexName(for: firstPlant.speciesID))」破土而出！"
+                    bannerNotice = TerrariumL10n.t("state.mist_first_plant", ["name": Self.codexName(for: firstPlant.speciesID)])
                 }
             }
         }
@@ -560,7 +611,7 @@ final class TerrariumState: ObservableObject {
         var inst = activeInstance
         guard !inst.isSleeping else { return }
         guard inst.foodBowlPortions < TerrariumConfig.maxFoodPortions else {
-            bannerNotice = "🥣 食盆已满，等小动物吃掉一些再投喂吧"
+            bannerNotice = TerrariumL10n.t("state.feed_full")
             return
         }
         bannerNotice = nil
@@ -581,9 +632,7 @@ final class TerrariumState: ObservableObject {
         vfxSubject.send(.feed(bowlScreenPos: bowlPt))
 
         if inst.critters.filter({ $0.residency == .resident || $0.residency == .visitor }).isEmpty {
-            bannerNotice = (inst.biome == .aquatic)
-                ? "🥣 已投放浮水鱼粮至喂食圈 · 前往「生物」可用生态点领养水生精灵"
-                : "🥣 已添粮至食盆 · 前往「生物」可用生态点领养小生命"
+            bannerNotice = TerrariumL10n.t(inst.biome == .aquatic ? "state.feed_aquatic_ok" : "state.feed_land_ok")
         }
 
         evaluateCurrentCodexAndSave()
@@ -598,13 +647,12 @@ final class TerrariumState: ObservableObject {
         inst.glassFogLevel = 0.0
         if witheredCount > 0 {
             saveData.ecoPoints += witheredCount
-            bannerNotice = (inst.biome == .aquatic)
-                ? "✨ 已擦净玻璃藻垢并清理 \(witheredCount) 株枯植（+\(witheredCount)点）"
-                : "✨ 已擦净水雾并清理 \(witheredCount) 株枯植（+\(witheredCount)点）"
+            bannerNotice = TerrariumL10n.t(
+                inst.biome == .aquatic ? "state.clean_algae_withered" : "state.clean_fog_withered",
+                ["count": "\(witheredCount)"]
+            )
         } else {
-            bannerNotice = (inst.biome == .aquatic)
-                ? "✨ 已擦净鱼缸玻璃藻垢"
-                : "✨ 已擦拭玻璃内壁水雾"
+            bannerNotice = TerrariumL10n.t(inst.biome == .aquatic ? "state.clean_algae" : "state.clean_fog")
         }
         activeInstance = inst
         vfxSubject.send(.clean)
@@ -644,7 +692,7 @@ final class TerrariumState: ObservableObject {
                 if inst.critters[idx].mealsEaten >= req {
                     inst.critters[idx].residency = .resident
                     let name = Self.critterNames(for: [kind])
-                    bannerNotice = "🎉 访客「\(name)」喜欢这里，正式定居了！"
+                    bannerNotice = TerrariumL10n.t("state.meal_settled", ["name": name])
                     unlockCodexIfNeeded(kind.rawValue, bonus: TerrariumConfig.codexRewardPoints(for: kind.rawValue))
                 }
             }
@@ -654,7 +702,7 @@ final class TerrariumState: ObservableObject {
             saveData.ecoPoints += reward
         }
         activeInstance = inst
-        vfxSubject.send(.ecoPopup(text: reward > 0 ? "+\(reward)" : "饱腹!", at: screenPoint))
+        vfxSubject.send(.ecoPopup(text: reward > 0 ? "+\(reward)" : TerrariumL10n.t("vfx.full"), at: screenPoint))
         evaluateCurrentCodexAndSave()
     }
 
@@ -679,10 +727,11 @@ final class TerrariumState: ObservableObject {
 
         let nickname = inst.critters[idx].nickname ?? TerrariumConfig.defaultNickname(for: kind)
         let personality = inst.critters[idx].personality
+        let localizedPersonality = TerrariumConfig.localizedPersonality(for: personality)
 
         if let startledAt = lastStartleAtByKind[kind],
            now.timeIntervalSince(startledAt) < TerrariumConfig.startleRecoverySeconds {
-            bannerNotice = "⏳ 「\(nickname)」刚刚受惊正在缓神中，稍后再轻抚它吧"
+            bannerNotice = TerrariumL10n.t("state.pet_startle", ["name": nickname])
             return .recoveringFromStartle
         }
 
@@ -693,7 +742,11 @@ final class TerrariumState: ObservableObject {
         }
 
         if inst.critters[idx].dailyPetCount >= TerrariumConfig.maxDailyEffectivePets {
-            bannerNotice = "💕 今天「\(nickname)」已收获满满心意（每日好感 \(TerrariumConfig.maxDailyEffectivePets)/\(TerrariumConfig.maxDailyEffectivePets)）"
+            bannerNotice = TerrariumL10n.t("state.pet_daily_max", [
+                "name": nickname,
+                "cur": "\(TerrariumConfig.maxDailyEffectivePets)",
+                "max": "\(TerrariumConfig.maxDailyEffectivePets)"
+            ])
             activeInstance = inst
             commitStateChange()
             return .dailyLimitReached
@@ -703,7 +756,11 @@ final class TerrariumState: ObservableObject {
             let elapsed = now.timeIntervalSince(lastPet)
             if elapsed < TerrariumConfig.petAffinityCooldownSeconds {
                 let minsLeft = max(1, Int(ceil((TerrariumConfig.petAffinityCooldownSeconds - elapsed) / 60.0)))
-                bannerNotice = "💕 轻轻摸了「\(nickname)」(\(personality)) · \(minsLeft)分钟后可继续增进好感"
+                bannerNotice = TerrariumL10n.t("state.pet_cooldown", [
+                    "name": nickname,
+                    "personality": localizedPersonality,
+                    "mins": "\(minsLeft)"
+                ])
                 return .onCooldown(remainingMinutes: minsLeft)
             }
         }
@@ -722,11 +779,21 @@ final class TerrariumState: ObservableObject {
 
         if leveledUp {
             let perkDesc = TerrariumConfig.perkDescription(for: personality, stage: newStage)
-            bannerNotice = "✨ 「\(nickname)」好感晋升【\(newStage.title)】（\(nextAffinity)/\(TerrariumConfig.maxAffinity)）· 解锁「\(perkDesc)」"
+            bannerNotice = TerrariumL10n.t("state.pet_levelup", [
+                "name": nickname,
+                "stage": newStage.title,
+                "cur": "\(nextAffinity)",
+                "max": "\(TerrariumConfig.maxAffinity)",
+                "perk": perkDesc
+            ])
             vfxSubject.send(.ecoPopup(text: "\(newStage.title)!", at: screenPoint))
         } else {
             let baseReply = TerrariumConfig.petReplyText(nickname: nickname, stage: newStage)
-            bannerNotice = "\(baseReply) · 好感 \(nextAffinity)/\(TerrariumConfig.maxAffinity)"
+            bannerNotice = TerrariumL10n.t("state.pet_reply_with_val", [
+                "reply": baseReply,
+                "cur": "\(nextAffinity)",
+                "max": "\(TerrariumConfig.maxAffinity)"
+            ])
         }
         commitStateChange()
         return .gained(delta: actualDelta, newStage: newStage, leveledUp: leveledUp)
@@ -749,7 +816,7 @@ final class TerrariumState: ObservableObject {
         isMovingPlant = true
         isConfirmingPrunePlant = false
         movingDecorID = nil
-        bannerNotice = "🪴 请点击沙盘中绿色空地格子完成植物移栽"
+        bannerNotice = TerrariumL10n.t("state.move_plant_prompt")
     }
 
     func moveSelectedPlant(to coord: GridCoord) {
@@ -766,9 +833,7 @@ final class TerrariumState: ObservableObject {
             biome: inst.biome
         )
         guard !blockedCoords.contains(coord) else {
-            bannerNotice = (inst.biome == .aquatic)
-                ? "⚠️ 该位置已有摆件、水草或处于喂食圈水域，请另选空位"
-                : "⚠️ 该位置已有摆件、植被或处于食盆净空区，请另选空位"
+            bannerNotice = TerrariumL10n.t(inst.biome == .aquatic ? "state.move_plant_blocked_aquatic" : "state.move_plant_blocked_land")
             return
         }
 
@@ -776,7 +841,11 @@ final class TerrariumState: ObservableObject {
         let name = Self.codexName(for: inst.plants[idx].speciesID)
         activeInstance = inst
         isMovingPlant = false
-        bannerNotice = "🪴 已将「\(name)」移栽至 (\(coord.col),\(coord.row))"
+        bannerNotice = TerrariumL10n.t("state.move_plant_ok", [
+            "name": name,
+            "col": "\(coord.col)",
+            "row": "\(coord.row)"
+        ])
         vfxSubject.send(.clean)
         commitStateChange()
     }
@@ -795,9 +864,9 @@ final class TerrariumState: ObservableObject {
         let pt = TerrariumConfig.isoToScreen(gx: Double(removed.coord.col) + 0.5, gy: Double(removed.coord.row) + 0.5, gz: 6)
         if refundPts > 0 {
             vfxSubject.send(.ecoPopup(text: "+\(refundPts)", at: pt))
-            bannerNotice = "✂️ 轻修剪「\(name)」返还 +\(refundPts) 生态点"
+            bannerNotice = TerrariumL10n.t("state.prune_ok", ["name": name, "pts": "\(refundPts)"])
         } else {
-            bannerNotice = "✂️ 已移除幼苗「\(name)」（幼苗清理不返还生态点）"
+            bannerNotice = TerrariumL10n.t("state.prune_sprout_ok", ["name": name])
         }
         vfxSubject.send(.clean)
         commitStateChange()
@@ -808,13 +877,7 @@ final class TerrariumState: ObservableObject {
     }
 
     static func stageLabel(for stage: PlantStage) -> String {
-        switch stage {
-        case .sprout: return "幼苗"
-        case .mature: return "茂盛"
-        case .lushDew: return "凝露"
-        case .wilting: return "缺水"
-        case .withered: return "枯萎"
-        }
+        stage.localizedName
     }
 
     func updateCritterCoord(kind: CritterKind, coord: GridCoord) {
@@ -843,7 +906,7 @@ final class TerrariumState: ObservableObject {
         selectedPlantID = nil
         isMovingPlant = false
         let dims = TerrariumConfig.decorDimensions(for: id)
-        bannerNotice = "🪵 请点击沙盘中绿色格子放置该 \(dims.cols)×\(dims.rows) 摆件"
+        bannerNotice = TerrariumL10n.t("state.move_decor_prompt", ["cols": "\(dims.cols)", "rows": "\(dims.rows)"])
     }
 
     func moveSelectedDecor(to origin: GridCoord) {
@@ -857,7 +920,7 @@ final class TerrariumState: ObservableObject {
             plants: inst.plants,
             biome: inst.biome
         ) else {
-            bannerNotice = "⚠️ 目标范围存在越界、植物、食盆净空区或其他摆件"
+            bannerNotice = TerrariumL10n.t("state.move_decor_blocked")
             return
         }
 
@@ -865,7 +928,11 @@ final class TerrariumState: ObservableObject {
         activeInstance = inst
         movingDecorID = nil
         let name = TerrariumConfig.decorCatalog(for: inst.biome).first(where: { $0.id == decorID })?.name ?? decorID
-        bannerNotice = "🪵 已将「\(name)」重新摆放至 (\(origin.col),\(origin.row))"
+        bannerNotice = TerrariumL10n.t("state.move_decor_ok", [
+            "name": name,
+            "col": "\(origin.col)",
+            "row": "\(origin.row)"
+        ])
         vfxSubject.send(.clean)
         commitStateChange()
     }
@@ -905,7 +972,7 @@ final class TerrariumState: ObservableObject {
             inst.enabledDecorIDs.append(id)
             let footprint = Set(TerrariumConfig.footprint(for: id, decorOrigins: inst.decorOrigins))
             inst.plants.removeAll { footprint.contains($0.coord) }
-            bannerNotice = "已解锁并摆放「\(item.name)」（可在生态箱点击调整位置）"
+            bannerNotice = TerrariumL10n.t("state.decor_unlocked", ["name": item.name])
         }
 
         TerrariumSimulation.evaluateCritterEcology(instance: &inst)
@@ -940,19 +1007,19 @@ final class TerrariumState: ObservableObject {
             let cur = inst.critters[existingIdx].residency
             if cur == .resident || cur == .visitor {
                 inst.critters[existingIdx].residency = .stored
-                bannerNotice = "📦 已将「\(spec.name)」收起至生物仓"
+                bannerNotice = TerrariumL10n.t("state.critter_stowed", ["name": spec.name])
             } else {
                 let check = TerrariumSimulation.critterUnlockEligibility(kind: kind, instance: inst)
                 guard check.eligible else {
-                    bannerNotice = "⚠️ 暂无法放回「\(spec.name)」：\(check.missingReason)"
+                    bannerNotice = TerrariumL10n.t("state.critter_cant_return", ["name": spec.name, "reason": check.missingReason])
                     return
                 }
                 let swapped = TerrariumSimulation.placeOrSwapCritter(kind: kind, instance: &inst)
                 if swapped.isEmpty {
-                    bannerNotice = "🐾 已将「\(spec.name)」放入生态箱"
+                    bannerNotice = TerrariumL10n.t("state.critter_placed", ["name": spec.name])
                 } else {
                     let swappedNames = Self.critterNames(for: swapped)
-                    bannerNotice = "⚖️ 食物链互斥：已放入「\(spec.name)」，并自动收纳「\(swappedNames)」"
+                    bannerNotice = TerrariumL10n.t("state.critter_swapped", ["name": spec.name, "swapped": swappedNames])
                 }
             }
             activeInstance = inst
@@ -964,11 +1031,11 @@ final class TerrariumState: ObservableObject {
         // 全新购买：需生态门槛达标 + 生态点足够
         let check = TerrariumSimulation.critterUnlockEligibility(kind: kind, instance: inst)
         guard check.eligible else {
-            bannerNotice = "⚠️ 尚未达成生态前置条件：\(check.missingReason)"
+            bannerNotice = TerrariumL10n.t("state.critter_ineligible", ["reason": check.missingReason])
             return
         }
         guard saveData.ecoPoints >= spec.cost else {
-            bannerNotice = "⚠️ 生态点不足（需要 \(spec.cost) 点）"
+            bannerNotice = TerrariumL10n.t("state.critter_no_pts", ["cost": "\(spec.cost)"])
             return
         }
 
@@ -978,10 +1045,10 @@ final class TerrariumState: ObservableObject {
         unlockCodexIfNeeded(kind.rawValue, bonus: TerrariumConfig.codexRewardPoints(for: kind.rawValue))
 
         if swapped.isEmpty {
-            bannerNotice = "🎉 已领养「\(spec.name)」入驻生态箱！"
+            bannerNotice = TerrariumL10n.t("state.critter_adopted", ["name": spec.name])
         } else {
             let swappedNames = Self.critterNames(for: swapped)
-            bannerNotice = "⚖️ 已领养「\(spec.name)」入驻（因食物链互斥自动收纳了「\(swappedNames)」）"
+            bannerNotice = TerrariumL10n.t("state.critter_adopted_swapped", ["name": spec.name, "swapped": swappedNames])
         }
         vfxSubject.send(.syncCritters)
         evaluateCurrentCodexAndSave()
@@ -1022,12 +1089,12 @@ final class TerrariumState: ObservableObject {
 
         switch nextMode {
         case .heating:
-            let equipName = (updated.biome == .aquatic) ? "恒温加热棒" : "夹缸晒背灯"
-            bannerNotice = "☀️ 已开启\(equipName)：正随时间稳态升温至 \(targetAmbient)°C"
+            let equipName = TerrariumL10n.t(updated.biome == .aquatic ? "ui.equip.heater" : "ui.equip.heat_lamp")
+            bannerNotice = TerrariumL10n.t("state.thermal_heat_on", ["equip": equipName, "temp": "\(targetAmbient)"])
         case .cooling:
-            bannerNotice = "❄️ 已开启夹缸降温扇：正随时间稳态降温至 \(targetAmbient)°C"
+            bannerNotice = TerrariumL10n.t("state.thermal_cool_on", ["temp": "\(targetAmbient)"])
         case .natural:
-            bannerNotice = "🌿 已关闭温控器材，回归自然室温 (\(targetAmbient)°C)"
+            bannerNotice = TerrariumL10n.t("state.thermal_off", ["temp": "\(targetAmbient)"])
         }
 
         TerrariumSimulation.updatePlants(instance: &updated, dt: 0)
@@ -1044,26 +1111,25 @@ final class TerrariumState: ObservableObject {
 
         if targetMode == .heating && !inst.hasHeatLamp {
             let cost = TerrariumConfig.heatLampCost
+            let equipName = TerrariumL10n.t(inst.biome == .aquatic ? "ui.equip.heater" : "ui.equip.heat_lamp")
             guard saveData.ecoPoints >= cost else {
-                let equipName = (inst.biome == .aquatic) ? "恒温加热棒" : "夹缸晒背灯"
-                bannerNotice = "⚠️ 购置「\(equipName)」需要 \(cost) 生态点"
+                bannerNotice = TerrariumL10n.t("state.thermal_need_pts", ["equip": equipName, "cost": "\(cost)"])
                 pendingPurchaseThermalMode = nil
                 return
             }
             saveData.ecoPoints -= cost
             inst.hasHeatLamp = true
-            let equipName = (inst.biome == .aquatic) ? "恒温加热棒" : "夹缸晒背灯"
-            bannerNotice = "🔌 已购置并安装「\(equipName)」，随时点击 ☀️ 即可开关"
+            bannerNotice = TerrariumL10n.t("state.thermal_heat_installed", ["equip": equipName])
         } else if targetMode == .cooling && !inst.hasCoolingFan {
             let cost = TerrariumConfig.coolingFanCost
             guard saveData.ecoPoints >= cost else {
-                bannerNotice = "⚠️ 购置「夹缸静音降温扇」需要 \(cost) 生态点"
+                bannerNotice = TerrariumL10n.t("state.thermal_fan_need_pts", ["cost": "\(cost)"])
                 pendingPurchaseThermalMode = nil
                 return
             }
             saveData.ecoPoints -= cost
             inst.hasCoolingFan = true
-            bannerNotice = "🔌 已购置并安装「夹缸静音降温扇」，随时点击 ❄️ 即可开关"
+            bannerNotice = TerrariumL10n.t("state.thermal_fan_installed")
         }
 
         pendingPurchaseThermalMode = nil
@@ -1075,7 +1141,7 @@ final class TerrariumState: ObservableObject {
         pendingPurchaseThermalMode = nil
     }
 
-    // MARK: - 多容器生态缸自由切换、购置与拆缸退点（上限 8 口）
+    // MARK: - 多容器生态缸自由切换、购置与拆缸退点（上限 9 口）
 
     func selectContainer(id: UUID) {
         guard saveData.containers.contains(where: { $0.id == id }),
@@ -1087,7 +1153,7 @@ final class TerrariumState: ObservableObject {
         movingDecorID = nil
         isShowingBuyTankSheet = false
         isConfirmingDeleteTank = false
-        bannerNotice = "已切换至「\(saveData.containers[activeContainerIndex].customName)」"
+        bannerNotice = TerrariumL10n.t("state.tank_switched", ["name": saveData.containers[activeContainerIndex].customName])
         commitStateChange()
         vfxSubject.send(.syncCritters)
     }
@@ -1095,20 +1161,19 @@ final class TerrariumState: ObservableObject {
     @discardableResult
     func purchaseNewTank(biome: TerrariumBiome, customName: String? = nil) -> Bool {
         guard saveData.containers.count < TerrariumConfig.maxTankSlots else {
-            bannerNotice = "⚠️ 已达到最大缸体容量上限 (\(TerrariumConfig.maxTankSlots)/\(TerrariumConfig.maxTankSlots))"
+            bannerNotice = TerrariumL10n.t("state.tank_max_cap", ["max": "\(TerrariumConfig.maxTankSlots)"])
             return false
         }
         let cost = TerrariumConfig.tankPurchaseCost(for: biome, existingTankCount: saveData.containers.count)
         guard saveData.ecoPoints >= cost else {
-            bannerNotice = "⚠️ 生态点不足（购置「\(biome.rawValue)」需 \(cost) 点）"
+            bannerNotice = TerrariumL10n.t("state.tank_no_pts", ["biome": biome.localizedName, "cost": "\(cost)"])
             return false
         }
 
         let sameTypeCount = saveData.containers.filter { $0.instance.biome == biome }.count
-        let shortTitle = biome.rawValue.replacingOccurrences(of: "缸", with: "")
         let assignedName = (customName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
             ? customName!
-            : "\(shortTitle)缸 #\(sameTypeCount + 1)"
+            : TerrariumL10n.t("tank.default_name", ["biome": biome.localizedShortName, "index": "\(sameTypeCount + 1)"])
 
         var emptyInstance = TerrariumInstanceState.empty(
             biome: biome,
@@ -1137,7 +1202,11 @@ final class TerrariumState: ObservableObject {
         movingDecorID = nil
         isShowingBuyTankSheet = false
         isConfirmingDeleteTank = false
-        bannerNotice = "\(biome.iconEmoji) 已购置新缸「\(assignedName)」！（-\(cost)点）"
+        bannerNotice = TerrariumL10n.t("state.tank_bought", [
+            "emoji": biome.iconEmoji,
+            "name": assignedName,
+            "cost": "\(cost)"
+        ])
         commitStateChange()
         vfxSubject.send(.syncCritters)
         return true
@@ -1146,7 +1215,7 @@ final class TerrariumState: ObservableObject {
     @discardableResult
     func deleteActiveContainer() -> Int {
         guard saveData.containers.count > 1 else {
-            bannerNotice = "⚠️ 至少需保留 1 口生态缸"
+            bannerNotice = TerrariumL10n.t("state.tank_min_one")
             isConfirmingDeleteTank = false
             return 0
         }
@@ -1161,7 +1230,7 @@ final class TerrariumState: ObservableObject {
         movingDecorID = nil
         isShowingBuyTankSheet = false
         isConfirmingDeleteTank = false
-        bannerNotice = "♻️ 已拆除「\(removed.customName)」，退回 +\(refund) 生态点"
+        bannerNotice = TerrariumL10n.t("state.tank_deleted", ["name": removed.customName, "refund": "\(refund)"])
         commitStateChange()
         vfxSubject.send(.syncCritters)
         return refund
@@ -1172,7 +1241,7 @@ final class TerrariumState: ObservableObject {
         guard !trimmed.isEmpty, !saveData.containers.isEmpty else { return }
         saveData.containers[activeContainerIndex].customName = String(trimmed.prefix(16))
         commitStateChange()
-        bannerNotice = "已将当前生态缸命名为「\(activeContainerName)」"
+        bannerNotice = TerrariumL10n.t("state.tank_renamed", ["name": activeContainerName])
     }
 
     func renameCritter(kind: CritterKind, to rawName: String) {
@@ -1184,7 +1253,7 @@ final class TerrariumState: ObservableObject {
         inst.critters[idx].nickname = safeName
         activeInstance = inst
         commitStateChange()
-        bannerNotice = "已为 \(kind.rawValue) 起名为「\(safeName)」"
+        bannerNotice = TerrariumL10n.t("state.critter_renamed", ["kind": kind.localizedName, "name": safeName])
     }
 
     func exportPixelSnapshot<V: View>(content: V) {
@@ -1194,7 +1263,7 @@ final class TerrariumState: ObservableObject {
               let tiffData = nsImage.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiffData),
               let pngData = bitmap.representation(using: .png, properties: [:]) else {
-            bannerNotice = "快照生成失败，请稍后重试"
+            bannerNotice = TerrariumL10n.t("state.snapshot_fail")
             return
         }
 
@@ -1204,13 +1273,13 @@ final class TerrariumState: ObservableObject {
         formatter.dateFormat = "yyyyMMdd_HHmm"
         let safeTankName = activeContainerName.replacingOccurrences(of: "/", with: "-")
         panel.nameFieldStringValue = "\(safeTankName)_\(formatter.string(from: Date())).png"
-        panel.title = "导出 4x 无损像素生态快照"
+        panel.title = TerrariumL10n.t("stage.snapshot_title")
         if panel.runModal() == .OK, let url = panel.url {
             do {
                 try pngData.write(to: url)
-                bannerNotice = "📸 已保存像素快照：\(url.lastPathComponent)"
+                bannerNotice = TerrariumL10n.t("state.snapshot_saved", ["file": url.lastPathComponent])
             } catch {
-                bannerNotice = "保存快照失败：\(error.localizedDescription)"
+                bannerNotice = TerrariumL10n.t("state.snapshot_save_err", ["err": error.localizedDescription])
             }
         }
     }
@@ -1258,7 +1327,10 @@ final class TerrariumState: ObservableObject {
             TerrariumSimulation.applyWeatherEvent(chosen, to: &inst, now: Date())
             TerrariumSimulation.updatePlants(instance: &inst, dt: 0)
             hasWeatherEvent = true
-            appendEventMessage("\(chosen.title)：\(chosen.effectText)")
+            appendEventMessage(TerrariumL10n.t("state.weather_pair", [
+                "title": chosen.title,
+                "effect": chosen.effectText
+            ]))
         }
         activeInstance = inst
         evaluateCurrentCodexAndSave()
@@ -1270,11 +1342,11 @@ final class TerrariumState: ObservableObject {
         if let spawned = TerrariumSimulation.attemptRandomPlantSpawn(instance: &inst, randomUnit: { 0.0 }) {
             TerrariumSimulation.updatePlants(instance: &inst, dt: 300)
             unlockCodexIfNeeded(spawned.speciesID, bonus: 3)
-            bannerNotice = "🌱 [管理员] 已催生：\(Self.codexName(for: spawned.speciesID))"
+            bannerNotice = TerrariumL10n.t("state.admin_spawn_ok", ["name": Self.codexName(for: spawned.speciesID)])
             activeInstance = inst
             evaluateCurrentCodexAndSave()
         } else {
-            bannerNotice = "🌱 [管理员] 暂无合适空格或植物已达上限"
+            bannerNotice = TerrariumL10n.t("state.admin_spawn_full")
         }
     }
 
@@ -1301,7 +1373,7 @@ final class TerrariumState: ObservableObject {
         selectedDecorID = nil
         movingDecorID = nil
         isShowingBuyTankSheet = false
-        bannerNotice = "存档已重置 · 欢迎开启 Day 0 空缸生态培育"
+        bannerNotice = TerrariumL10n.t("state.save_reset")
         commitStateChange()
         vfxSubject.send(.syncCritters)
     }
@@ -1313,7 +1385,10 @@ final class TerrariumState: ObservableObject {
         saveData.unlockedCodexIDs.append(id)
         saveData.ecoPoints += bonus
         hasWeatherEvent = true
-        appendEventMessage("图鉴新解锁：\(Self.codexName(for: id))（+\(bonus)点）")
+        appendEventMessage(TerrariumL10n.t("state.codex_unlocked_bonus", [
+            "name": Self.codexName(for: id),
+            "bonus": "\(bonus)"
+        ]))
     }
 
     private func evaluateCurrentCodexAndSave() {
@@ -1347,11 +1422,11 @@ final class TerrariumState: ObservableObject {
     }
 
     private static func codexNames(for ids: [String]) -> String {
-        ids.map { codexName(for: $0) }.joined(separator: "、")
+        ids.map { codexName(for: $0) }.joined(separator: TerrariumL10n.shared.currentLanguage.listSeparator)
     }
 
     private static func critterNames(for kinds: [CritterKind]) -> String {
-        kinds.map { codexName(for: $0.rawValue) }.joined(separator: "、")
+        kinds.map { codexName(for: $0.rawValue) }.joined(separator: TerrariumL10n.shared.currentLanguage.listSeparator)
     }
 
     private func commitStateChange() {
@@ -1359,7 +1434,10 @@ final class TerrariumState: ObservableObject {
         let newAchs = TerrariumSimulation.evaluateAchievements(data: &saveData)
         if let first = newAchs.first {
             let bonusSum = newAchs.reduce(0) { $0 + $1.rewardPoints }
-            bannerNotice = "🏅 解锁成就称号「\(first.title)」+\(bonusSum) 生态点"
+            bannerNotice = TerrariumL10n.t("state.ach_unlocked", [
+                "title": first.title,
+                "bonus": "\(bonusSum)"
+            ])
         }
         saveData.lastSavedAt = now
         syncPublishedFromSaveData(now: now)
@@ -1371,7 +1449,7 @@ final class TerrariumState: ObservableObject {
         saveData.equippedTitleID = achievementID
         commitStateChange()
         if let def = TerrariumConfig.defaultAchievements.first(where: { $0.id == achievementID }) {
-            bannerNotice = "已佩戴称号「\(def.title)」"
+            bannerNotice = TerrariumL10n.t("state.title_equipped", ["title": def.title])
         }
     }
 
@@ -1379,7 +1457,9 @@ final class TerrariumState: ObservableObject {
         let inst = activeInstance
         containers = saveData.containers
         activeContainerID = saveData.activeContainerID
-        activeContainerName = saveData.containers.isEmpty ? "苔原缸 #1" : saveData.containers[activeContainerIndex].customName
+        activeContainerName = saveData.containers.isEmpty
+            ? TerrariumL10n.t("tank.default_name", ["biome": TerrariumBiome.meadow.localizedShortName, "index": "1"])
+            : saveData.containers[activeContainerIndex].customName
         currentBiome = inst.biome
         thermalMode = inst.thermalMode
         hasHeatLamp = inst.hasHeatLamp
@@ -1436,18 +1516,18 @@ final class TerrariumState: ObservableObject {
         if saveData.unlockedFrameSkinIDs.contains(skin.rawValue) {
             saveData.activeFrameSkinID = skin.rawValue
             commitStateChange()
-            bannerNotice = "已更换缸体边框「\(skin.displayName)」"
+            bannerNotice = TerrariumL10n.t("state.skin_changed", ["name": skin.displayName])
             return true
         }
         guard saveData.ecoPoints >= skin.cost else {
-            bannerNotice = "点数不足（需要 \(skin.cost) 点）"
+            bannerNotice = TerrariumL10n.t("state.skin_no_pts", ["cost": "\(skin.cost)"])
             return false
         }
         saveData.ecoPoints -= skin.cost
         saveData.unlockedFrameSkinIDs.append(skin.rawValue)
         saveData.activeFrameSkinID = skin.rawValue
         commitStateChange()
-        bannerNotice = "已解锁并启用「\(skin.displayName)」边框"
+        bannerNotice = TerrariumL10n.t("state.skin_unlocked", ["name": skin.displayName])
         return true
     }
 }

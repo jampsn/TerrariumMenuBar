@@ -21,33 +21,35 @@ struct MenuBarPopoverView: View {
             // 顶部标题与 Tab 栏（连击标题 5 次解锁会话级管理员模式）
             HStack(spacing: 4) {
                 HStack(spacing: 4) {
-                    Text(state.isAdminMode ? "TERRARIUM" : "PIXEL TERRARIUM")
+                    Text(state.isAdminMode ? TerrariumL10n.t("ui.brand_short") : TerrariumL10n.t("ui.brand_full"))
                         .font(.system(size: 10.5, weight: .bold, design: .monospaced))
                         .foregroundColor(textMain)
                         .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
+                        .minimumScaleFactor(0.78)
                         .onTapGesture {
                             state.registerSecretTitleTap()
                         }
                     if state.isAdminMode {
-                        Text("[ADMIN]")
+                        Text(TerrariumL10n.t("ui.admin_badge"))
                             .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-                            .fixedSize(horizontal: true, vertical: false)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(adminAmber.opacity(0.22))
                             .foregroundColor(adminAmber)
                             .overlay(Rectangle().stroke(adminAmber.opacity(0.6), lineWidth: 1))
                     }
-                    Text("Day \(state.idleDays)")
+                    Text(TerrariumL10n.t("ui.day_badge", ["days": "\(state.idleDays)"]))
                         .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-                        .fixedSize(horizontal: true, vertical: false)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
                         .background(bgCard)
                         .foregroundColor(textMuted)
                         .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
-                        .help("累计挂机天数：\(state.idleDays) 天（重置存档后清零）")
+                        .help(TerrariumL10n.t("ui.day_badge_help", ["days": "\(state.idleDays)"]))
                     Button("") {
                         state.toggleAdminMode()
                     }
@@ -58,15 +60,23 @@ struct MenuBarPopoverView: View {
 
                 Spacer(minLength: 4)
 
-                HStack(spacing: 4) {
+                HStack(spacing: 3.5) {
                     ForEach(PopoverTab.allCases, id: \.self) { tab in
                         Button {
                             state.currentTab = tab
                         } label: {
-                            Text(tab == .codex ? "图鉴(\(state.unlockedCodexCount)/\(state.codexEntries.count))" : tab.rawValue)
+                            let labelText = (tab == .codex)
+                                ? TerrariumL10n.t("ui.tab.codex_count", [
+                                    "label": tab.localizedTitle,
+                                    "unlocked": "\(state.unlockedCodexCount)",
+                                    "total": "\(state.codexEntries.count)"
+                                ])
+                                : tab.localizedTitle
+                            Text(labelText)
                                 .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                                .fixedSize(horizontal: true, vertical: false)
-                                .padding(.horizontal, 7)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                                .padding(.horizontal, 5.5)
                                 .padding(.vertical, 3)
                                 .background(state.currentTab == tab ? accentGreen : bgCard)
                                 .foregroundColor(state.currentTab == tab ? .white : textMuted)
@@ -107,32 +117,42 @@ struct MenuBarPopoverView: View {
                 Text(state.statusText)
                     .font(.system(size: 10.5, design: .monospaced))
                     .foregroundColor(textMuted)
-                    .lineLimit(2)
+                    .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 6) {
-                    Text(state.isSleeping ? "休眠中" : "下轮气候 ~\(state.nextEventMinutesRemaining)m")
+                    Text(state.isSleeping
+                         ? TerrariumL10n.t("ui.footer.sleeping")
+                         : TerrariumL10n.t("ui.footer.next_climate", ["mins": "\(state.nextEventMinutesRemaining)"]))
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(textMuted)
-                    Text("· 生态点: \(state.ecoPoints)")
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                    Text(TerrariumL10n.t("ui.footer.eco_points", ["points": "\(state.ecoPoints)"]))
                         .font(.system(size: 10.5, weight: .bold, design: .monospaced))
                         .foregroundColor(adminAmber)
-                    Spacer()
-                    Button("⚙️ 设置") {
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Spacer(minLength: 4)
+                    Button(TerrariumL10n.t("ui.footer.settings")) {
                         state.isConfirmingResetSave = false
                         state.isShowingSettings.toggle()
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(state.isShowingSettings ? adminAmber : textMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
 
-                    Button("退出") {
+                    Button(TerrariumL10n.t("ui.footer.quit")) {
                         state.flushSave()
                         NSApp.terminate(nil)
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(textMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .padding(.leading, 4)
                 }
             }
@@ -157,30 +177,37 @@ struct MenuBarPopoverView: View {
         .frame(width: 472, alignment: .top)
         .fixedSize(horizontal: false, vertical: true)
         .background(bgMain)
-        .background(MenuBarWindowTopPinHelper(triggerKey: "\(state.currentTab.rawValue)_\(state.isAdminMode)_\(state.isShowingBuyTankSheet)_\(state.containers.count)_\(state.selectedPlantID?.uuidString ?? "")_\(state.selectedDecorID ?? "")"))
+        .background(MenuBarWindowTopPinHelper(triggerKey: "\(state.currentTab.rawValue)_\(state.activeLanguage.rawValue)_\(state.isAdminMode)_\(state.isShowingBuyTankSheet)_\(state.containers.count)_\(state.selectedPlantID?.uuidString ?? "")_\(state.selectedDecorID ?? "")"))
         .preferredColorScheme(.dark)
     }
 
     private var biomeSwitcherBar: some View {
         VStack(spacing: 6) {
             // 顶部管理条 + 已购缸体直接按键切换区（有多少个显示多少个，绝不展示未买空位）
-            HStack(spacing: 6) {
-                Text("我的生态缸 (\(state.containers.count)/\(TerrariumConfig.maxTankSlots))")
+            HStack(spacing: 5) {
+                Text(TerrariumL10n.t("ui.switcher.title", [
+                    "count": "\(state.containers.count)",
+                    "max": "\(TerrariumConfig.maxTankSlots)"
+                ]))
                     .font(.system(size: 10.5, weight: .bold, design: .monospaced))
                     .foregroundColor(textMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
 
                 if state.isResonanceActive {
-                    Text("✨共鸣")
+                    Text(TerrariumL10n.t("ui.switcher.resonance"))
                         .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
                         .background(adminAmber.opacity(0.2))
                         .foregroundColor(adminAmber)
                         .overlay(Rectangle().stroke(adminAmber.opacity(0.6), lineWidth: 1))
-                        .help("跨生态共鸣已激活：植物萌发 +10%，分缸效率 +5%")
+                        .help(TerrariumL10n.t("ui.switcher.resonance_help"))
                 }
 
-                Spacer()
+                Spacer(minLength: 4)
 
                 Button("✏️") {
                     state.renameTankDraft = state.activeContainerName
@@ -192,7 +219,7 @@ struct MenuBarPopoverView: View {
                 .padding(.vertical, 3)
                 .background(bgCard)
                 .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
-                .help("重命名当前生态缸")
+                .help(TerrariumL10n.t("ui.switcher.rename_help"))
 
                 Button("📸") {
                     state.exportPixelSnapshot(content: PixelStageSnapshotCard(state: state))
@@ -203,33 +230,37 @@ struct MenuBarPopoverView: View {
                 .padding(.vertical, 3)
                 .background(bgCard)
                 .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
-                .help("导出 4x 无损像素生态快照")
+                .help(TerrariumL10n.t("ui.switcher.snapshot_help"))
 
-                Button(state.isShowingBuyTankSheet ? "收起商店" : "+ 购置新缸") {
+                Button(TerrariumL10n.t(state.isShowingBuyTankSheet ? "ui.switcher.hide_shop" : "ui.switcher.buy_tank")) {
                     state.isShowingBuyTankSheet.toggle()
                     state.isConfirmingDeleteTank = false
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 10.5, weight: .bold, design: .monospaced))
-                .padding(.horizontal, 9)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(state.isShowingBuyTankSheet ? adminAmber : accentGreen)
                 .foregroundColor(state.isShowingBuyTankSheet ? .black : .white)
                 .overlay(Rectangle().stroke(borderCol, lineWidth: 1.5))
 
                 if state.containers.count > 1 {
-                    Button("拆缸") {
+                    Button(TerrariumL10n.t("ui.switcher.delete")) {
                         state.isConfirmingDeleteTank.toggle()
                         state.isShowingBuyTankSheet = false
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 4)
                     .background(state.isConfirmingDeleteTank ? Color.red.opacity(0.75) : bgCard)
                     .foregroundColor(state.isConfirmingDeleteTank ? .white : Color(red: 0.96, green: 0.56, blue: 0.52))
                     .overlay(Rectangle().stroke(borderCol, lineWidth: 1.5))
-                    .help("拆除当前生态缸并退回点数")
+                    .help(TerrariumL10n.t("ui.switcher.delete_help"))
                 }
             }
 
@@ -272,26 +303,34 @@ struct MenuBarPopoverView: View {
 
             if state.isConfirmingDeleteTank && state.containers.count > 1 {
                 HStack(spacing: 6) {
-                    Text("确认拆除「\(state.activeContainerName)」并退回 +\(state.activeContainerRefundEstimate) 点？")
+                    Text(TerrariumL10n.t("ui.delete_tank.confirm", [
+                        "name": state.activeContainerName,
+                        "refund": "\(state.activeContainerRefundEstimate)"
+                    ]))
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(Color(red: 0.99, green: 0.80, blue: 0.76))
-                    Spacer()
-                    Button("确认退点") {
+                        .lineLimit(3)
+                    Spacer(minLength: 4)
+                    Button(TerrariumL10n.t("ui.delete_tank.confirm_btn")) {
                         state.deleteActiveContainer()
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(Color.red.opacity(0.8))
                     .foregroundColor(.white)
                     .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
 
-                    Button("取消") {
+                    Button(TerrariumL10n.t("ui.common.cancel")) {
                         state.isConfirmingDeleteTank = false
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 10, design: .monospaced))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
                     .background(bgCard)
@@ -305,7 +344,7 @@ struct MenuBarPopoverView: View {
 
             if state.isShowingBuyTankSheet {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("选择生态类型购置新缸体（各缸独立挂机，上限 \(TerrariumConfig.maxTankSlots) 口）：")
+                    Text(TerrariumL10n.t("ui.buy_tank.prompt", ["max": "\(TerrariumConfig.maxTankSlots)"]))
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(textMuted)
                     HStack(spacing: 5) {
@@ -319,12 +358,19 @@ struct MenuBarPopoverView: View {
                             } label: {
                                 VStack(spacing: 2) {
                                     Text(biome.iconEmoji)
-                                    Text(biome.rawValue.replacingOccurrences(of: "缸", with: ""))
+                                    Text(biome.localizedShortName)
                                         .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                    Text(biome.isPlayableInCurrentWave ? "\(cost)点" : "下轮上线")
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.72)
+                                    Text(biome.isPlayableInCurrentWave
+                                         ? TerrariumL10n.t("ui.common.cost_points", ["cost": "\(cost)"])
+                                         : TerrariumL10n.t("ui.buy_tank.coming_soon"))
                                         .font(.system(size: 9, design: .monospaced))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
                                 }
                                 .frame(maxWidth: .infinity)
+                                .padding(.horizontal, 3)
                                 .padding(.vertical, 5)
                                 .background(canBuy ? adminAmber : bgCard)
                                 .foregroundColor(canBuy ? .black : textMuted.opacity(0.65))
@@ -350,11 +396,16 @@ struct MenuBarPopoverView: View {
 
             if let selPlant = state.selectedPlant {
                 HStack(spacing: 6) {
-                    Text("🌱 \(TerrariumState.displayName(forPlantSpecies: selPlant.speciesID)) · \(TerrariumState.stageLabel(for: selPlant.stage))")
+                    Text(TerrariumL10n.t("ui.plant.title", [
+                        "name": TerrariumState.displayName(forPlantSpecies: selPlant.speciesID),
+                        "stage": TerrariumState.stageLabel(for: selPlant.stage)
+                    ]))
                         .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
                         .foregroundColor(textMain)
-                    Spacer()
-                    Button(state.isMovingPlant ? "点沙盘空位..." : "移栽") {
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Spacer(minLength: 4)
+                    Button(TerrariumL10n.t(state.isMovingPlant ? "ui.plant.moving" : "ui.plant.move")) {
                         if state.isMovingPlant {
                             state.isMovingPlant = false
                         } else {
@@ -363,18 +414,22 @@ struct MenuBarPopoverView: View {
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(state.isMovingPlant ? adminAmber : accentGreen)
                     .foregroundColor(state.isMovingPlant ? .black : .white)
                     .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
 
-                    Button(selPlant.stage == .sprout ? "移除幼苗(0点)" : "修剪(+1点)") {
+                    Button(TerrariumL10n.t(selPlant.stage == .sprout ? "ui.plant.remove_sprout" : "ui.plant.prune")) {
                         state.isMovingPlant = false
                         state.isConfirmingPrunePlant = true
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(bgCard)
@@ -397,27 +452,31 @@ struct MenuBarPopoverView: View {
                     let plantName = TerrariumState.displayName(forPlantSpecies: selPlant.speciesID)
                     let isSprout = (selPlant.stage == .sprout)
                     HStack(spacing: 6) {
-                        Text(isSprout ? "⚠️ 确认移除幼苗「\(plantName)」？幼苗修剪不返还生态点（+0点）" : "✂️ 确认修剪「\(plantName)」？将移除植株并返还 +1 生态点")
+                        Text(TerrariumL10n.t(isSprout ? "ui.plant.confirm_remove_sprout" : "ui.plant.confirm_prune", ["name": plantName]))
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(isSprout ? Color(red: 0.99, green: 0.80, blue: 0.76) : adminAmber)
-                            .lineLimit(2)
-                        Spacer()
-                        Button(isSprout ? "确认移除" : "确认 +1点") {
+                            .lineLimit(3)
+                        Spacer(minLength: 4)
+                        Button(TerrariumL10n.t(isSprout ? "ui.plant.confirm_remove_btn" : "ui.plant.confirm_prune_btn")) {
                             state.pruneSelectedPlant()
                         }
                         .buttonStyle(.plain)
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(isSprout ? Color.red.opacity(0.8) : accentGreen)
                         .foregroundColor(.white)
                         .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
 
-                        Button("取消") {
+                        Button(TerrariumL10n.t("ui.common.cancel")) {
                             state.isConfirmingPrunePlant = false
                         }
                         .buttonStyle(.plain)
                         .font(.system(size: 10, design: .monospaced))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(bgCard)
@@ -432,11 +491,17 @@ struct MenuBarPopoverView: View {
                 let isMovingThis = (state.movingDecorID == selDecor.id)
                 let dims = TerrariumConfig.decorDimensions(for: selDecor.id)
                 HStack(spacing: 6) {
-                    Text("🪵 \(selDecor.name) (\(dims.cols)×\(dims.rows))")
+                    Text(TerrariumL10n.t("ui.decor_sel.title", [
+                        "name": selDecor.name,
+                        "cols": "\(dims.cols)",
+                        "rows": "\(dims.rows)"
+                    ]))
                         .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
                         .foregroundColor(textMain)
-                    Spacer()
-                    Button(isMovingThis ? "点击沙盘绿格..." : "移动位置") {
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Spacer(minLength: 4)
+                    Button(TerrariumL10n.t(isMovingThis ? "ui.decor_sel.moving" : "ui.decor_sel.move")) {
                         if isMovingThis {
                             state.movingDecorID = nil
                         } else {
@@ -445,17 +510,21 @@ struct MenuBarPopoverView: View {
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(isMovingThis ? adminAmber : accentGreen)
                     .foregroundColor(isMovingThis ? .black : .white)
                     .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
 
-                    Button("收起") {
+                    Button(TerrariumL10n.t("ui.decor_sel.stow")) {
                         state.handleDecorAction(id: selDecor.id)
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(bgCard)
@@ -476,17 +545,19 @@ struct MenuBarPopoverView: View {
             }
 
             if let eventMsg = state.eventMessage {
-                HStack {
+                HStack(spacing: 6) {
                     Text("⚡ \(eventMsg)")
                         .font(.system(size: 10.5, design: .monospaced))
                         .foregroundColor(Color(red: 0.99, green: 0.90, blue: 0.54))
-                        .lineLimit(2)
-                    Spacer()
-                    Button("已知晓") {
+                        .lineLimit(3)
+                    Spacer(minLength: 4)
+                    Button(TerrariumL10n.t("ui.common.acknowledge")) {
                         state.dismissEvent()
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(bgCard)
@@ -508,30 +579,37 @@ struct MenuBarPopoverView: View {
                 )
                 VStack(spacing: 3) {
                     HStack(spacing: 3) {
-                        Text(state.currentBiome == .aquatic ? "水温" : "温度")
+                        Text(TerrariumL10n.t(state.currentBiome == .aquatic ? "sensor.water_temp" : "sensor.temp"))
                             .foregroundColor(textMuted)
-                            .fixedSize(horizontal: true, vertical: false)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
                         Spacer(minLength: 2)
                         if state.thermalMode != .natural && targetTemp != state.temperature {
                             Text("→\(targetTemp)°")
                                 .font(.system(size: 9.5, design: .monospaced))
                                 .foregroundColor(state.thermalMode == .heating ? Color.orange : Color.cyan)
+                                .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
                         }
                         Text("\(state.temperature)°C")
                             .bold()
                             .foregroundColor(textMain)
+                            .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
                     }
                     HStack(spacing: 3) {
-                        let tempSubtitle = (state.localOutdoorTempC != nil) ? "\(state.tempHint)·外\(state.localOutdoorTempC!)°" : state.tempHint
+                        let tempSubtitle = (state.localOutdoorTempC != nil)
+                            ? TerrariumL10n.t("sensor.temp_sub_outdoor", ["hint": state.tempHint, "temp": "\(state.localOutdoorTempC!)"])
+                            : state.tempHint
                         Text(tempSubtitle)
                             .font(.system(size: 9.5, design: .monospaced))
                             .foregroundColor(textMuted)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.75)
+                            .minimumScaleFactor(0.7)
                             .truncationMode(.tail)
-                            .help(state.localOutdoorTempC != nil ? "已联动\(state.localCityName ?? "本地")实时气温 \(state.localOutdoorTempC!)°C" : "正在同步本地实时气温")
+                            .help(state.localOutdoorTempC != nil
+                                  ? TerrariumL10n.t("sensor.outdoor_help", ["city": state.localizedLocalCityName, "temp": "\(state.localOutdoorTempC!)"])
+                                  : TerrariumL10n.t("sensor.outdoor_syncing"))
                         Spacer(minLength: 2)
                         Button(state.hasHeatLamp ? "☀️" : "☀️\(TerrariumConfig.heatLampCost)") {
                             state.toggleThermalMode(.heating)
@@ -544,7 +622,9 @@ struct MenuBarPopoverView: View {
                         .background(state.thermalMode == .heating ? Color.orange : bgHeader)
                         .foregroundColor(state.thermalMode == .heating ? .black : (state.hasHeatLamp ? textMain : adminAmber))
                         .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
-                        .help(state.hasHeatLamp ? "夹缸加热器 (+6°C 稳态升温至 \(targetTemp)°C)" : "消耗 \(TerrariumConfig.heatLampCost) 生态点购置并夹装加热灯/棒")
+                        .help(state.hasHeatLamp
+                              ? TerrariumL10n.t("sensor.heat_help_on", ["temp": "\(targetTemp)"])
+                              : TerrariumL10n.t("sensor.heat_help_off", ["cost": "\(TerrariumConfig.heatLampCost)"]))
 
                         Button(state.hasCoolingFan ? "❄️" : "❄️\(TerrariumConfig.coolingFanCost)") {
                             state.toggleThermalMode(.cooling)
@@ -557,7 +637,9 @@ struct MenuBarPopoverView: View {
                         .background(state.thermalMode == .cooling ? Color.cyan : bgHeader)
                         .foregroundColor(state.thermalMode == .cooling ? .black : (state.hasCoolingFan ? textMain : adminAmber))
                         .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
-                        .help(state.hasCoolingFan ? "夹缸降温扇 (-4°C 稳态降温至 \(targetTemp)°C)" : "消耗 \(TerrariumConfig.coolingFanCost) 生态点购置并夹装降温扇")
+                        .help(state.hasCoolingFan
+                              ? TerrariumL10n.t("sensor.fan_help_on", ["temp": "\(targetTemp)"])
+                              : TerrariumL10n.t("sensor.fan_help_off", ["cost": "\(TerrariumConfig.coolingFanCost)"]))
 
                         if state.isAdminMode {
                             miniBtn("-", action: { state.adjustTemp(-1) })
@@ -573,7 +655,7 @@ struct MenuBarPopoverView: View {
                 .overlay(Rectangle().stroke(borderCol, lineWidth: 1.5))
 
                 readOnlySensorBox(
-                    label: state.currentBiome == .aquatic ? "溶氧" : "湿度",
+                    label: TerrariumL10n.t(state.currentBiome == .aquatic ? "sensor.oxygen" : "sensor.humidity"),
                     value: "\(state.humidity)%",
                     hint: state.humHint,
                     allowAdminButtons: state.isAdminMode,
@@ -583,27 +665,32 @@ struct MenuBarPopoverView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 VStack(spacing: 3) {
                     HStack(spacing: 3) {
-                        Text(state.currentBiome == .aquatic ? "浮圈" : "食盆")
+                        Text(TerrariumL10n.t(state.currentBiome == .aquatic ? "sensor.feeding_ring" : "sensor.food_bowl"))
                             .foregroundColor(textMuted)
-                            .fixedSize(horizontal: true, vertical: false)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
                         Spacer(minLength: 2)
                         Text("\(state.foodBowlPortions)/\(TerrariumConfig.maxFoodPortions)")
                             .bold()
                             .foregroundColor(textMain)
+                            .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
                     }
                     HStack(spacing: 3) {
-                        Text("住民:\(state.activeDisplayCritters.count)")
+                        Text(TerrariumL10n.t("sensor.critters_count", ["count": "\(state.activeDisplayCritters.count)"]))
                             .font(.system(size: 9.5, design: .monospaced))
                             .foregroundColor(textMuted)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .minimumScaleFactor(0.72)
                         Spacer(minLength: 2)
-                        Text("植株:\(state.plants.count)/\(TerrariumConfig.maxPlantsCap)")
+                        Text(TerrariumL10n.t("sensor.plants_count", [
+                            "count": "\(state.plants.count)",
+                            "max": "\(TerrariumConfig.maxPlantsCap)"
+                        ]))
                             .font(.system(size: 9.5, design: .monospaced))
                             .foregroundColor(textMuted)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .minimumScaleFactor(0.72)
                     }
                     .frame(minHeight: 16)
                 }
@@ -617,30 +704,36 @@ struct MenuBarPopoverView: View {
 
             if let pendingThermal = state.pendingPurchaseThermalMode {
                 let isHeat = (pendingThermal == .heating)
-                let equipName = isHeat ? (state.currentBiome == .aquatic ? "恒温加热棒" : "夹缸晒背灯") : "夹缸静音降温扇"
+                let equipName = TerrariumL10n.t(isHeat
+                                                ? (state.currentBiome == .aquatic ? "ui.equip.heater" : "ui.equip.heat_lamp")
+                                                : "ui.equip.cooling_fan")
                 let cost = isHeat ? TerrariumConfig.heatLampCost : TerrariumConfig.coolingFanCost
                 HStack(spacing: 6) {
-                    Text("🔌 消耗 \(cost) 点购置并安装「\(equipName)」？（安装后可随时免费开关）")
+                    Text(TerrariumL10n.t("ui.equip.confirm_prompt", ["cost": "\(cost)", "name": equipName]))
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(textMain)
-                        .lineLimit(2)
-                    Spacer()
-                    Button("确认 \(cost)点") {
+                        .lineLimit(3)
+                    Spacer(minLength: 4)
+                    Button(TerrariumL10n.t("ui.equip.confirm_btn", ["cost": "\(cost)"])) {
                         state.confirmPurchaseThermalEquipment()
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
                     .background(adminAmber)
                     .foregroundColor(.black)
                     .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
 
-                    Button("取消") {
+                    Button(TerrariumL10n.t("ui.common.cancel")) {
                         state.cancelPurchaseThermalEquipment()
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 10, design: .monospaced))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
                     .background(bgCard)
@@ -654,12 +747,12 @@ struct MenuBarPopoverView: View {
 
             // 4 个自然演进核心交互按钮
             HStack(spacing: 6) {
-                pixelActionButton(icon: "icon_mist", title: state.currentBiome == .aquatic ? "换水打氧" : "喷水加湿") { state.mist() }
-                pixelActionButton(icon: "icon_feed", title: state.currentBiome == .aquatic ? "投放鱼粮" : "食盆投喂") { state.feed() }
-                pixelActionButton(icon: "icon_clean", title: state.currentBiome == .aquatic ? "擦净藻垢" : "清理擦雾") { state.clean() }
+                pixelActionButton(icon: "icon_mist", title: TerrariumL10n.t(state.currentBiome == .aquatic ? "action.water_o2" : "action.mist")) { state.mist() }
+                pixelActionButton(icon: "icon_feed", title: TerrariumL10n.t(state.currentBiome == .aquatic ? "action.feed_fish" : "action.feed_land")) { state.feed() }
+                pixelActionButton(icon: "icon_clean", title: TerrariumL10n.t(state.currentBiome == .aquatic ? "action.clean_algae" : "action.clean_fog")) { state.clean() }
                 pixelActionButton(
                     icon: "icon_sleep",
-                    title: state.isSleeping ? "唤醒" : "休眠",
+                    title: TerrariumL10n.t(state.isSleeping ? "action.wake" : "action.sleep"),
                     highlighted: state.isSleeping
                 ) { state.toggleSleep() }
             }
@@ -672,8 +765,10 @@ struct MenuBarPopoverView: View {
                             Button {
                                 state.setAtmosphere(atm)
                             } label: {
-                                Text(atm.rawValue.prefix(2))
+                                Text(atm.localizedShortName)
                                     .font(.system(size: 10, design: .monospaced))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 3)
                                     .background(state.atmosphere == atm ? accentGreen : bgCard)
@@ -682,65 +777,73 @@ struct MenuBarPopoverView: View {
                             }
                             .buttonStyle(.plain)
                         }
-                        Spacer()
-                        Button("-10点") { state.adjustEcoPointsDebug(-10) }
+                        Spacer(minLength: 2)
+                        Button(TerrariumL10n.t("admin.pts_minus10")) { state.adjustEcoPointsDebug(-10) }
                             .buttonStyle(.plain)
                             .font(.system(size: 10, design: .monospaced))
-                            .padding(.horizontal, 6).padding(.vertical, 3)
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                            .padding(.horizontal, 5).padding(.vertical, 3)
                             .background(bgCard).foregroundColor(textMuted)
                             .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
 
-                        Button("+10点") { state.adjustEcoPointsDebug(10) }
+                        Button(TerrariumL10n.t("admin.pts_plus10")) { state.adjustEcoPointsDebug(10) }
                             .buttonStyle(.plain)
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .padding(.horizontal, 6).padding(.vertical, 3)
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                            .padding(.horizontal, 5).padding(.vertical, 3)
                             .background(bgCard).foregroundColor(adminAmber)
                             .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
 
-                        Button("+50点") { state.adjustEcoPointsDebug(50) }
+                        Button(TerrariumL10n.t("admin.pts_plus50")) { state.adjustEcoPointsDebug(50) }
                             .buttonStyle(.plain)
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .padding(.horizontal, 6).padding(.vertical, 3)
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                            .padding(.horizontal, 5).padding(.vertical, 3)
                             .background(bgCard).foregroundColor(adminAmber)
                             .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
                     }
                     HStack(spacing: 4) {
-                        Button("⚡ 事件") { state.simulateWeatherEvent() }
+                        Button(TerrariumL10n.t("admin.event")) { state.simulateWeatherEvent() }
                             .buttonStyle(.plain)
                             .font(.system(size: 10, design: .monospaced))
+                            .lineLimit(1).minimumScaleFactor(0.8)
                             .padding(.horizontal, 6).padding(.vertical, 3)
                             .background(bgCard).foregroundColor(adminAmber)
                             .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
 
-                        Button("🌱 催生") { state.triggerPlantPulseDebug() }
+                        Button(TerrariumL10n.t("admin.spawn_plant")) { state.triggerPlantPulseDebug() }
                             .buttonStyle(.plain)
                             .font(.system(size: 10, design: .monospaced))
+                            .lineLimit(1).minimumScaleFactor(0.8)
                             .padding(.horizontal, 6).padding(.vertical, 3)
                             .background(bgCard).foregroundColor(textMain)
                             .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
 
-                        Button(state.showIsoGridDebug ? "隐藏网格" : "网格") {
+                        Button(TerrariumL10n.t(state.showIsoGridDebug ? "admin.grid_hide" : "admin.grid_show")) {
                             state.showIsoGridDebug.toggle()
                         }
                         .buttonStyle(.plain)
                         .font(.system(size: 10, design: .monospaced))
+                        .lineLimit(1).minimumScaleFactor(0.8)
                         .padding(.horizontal, 6).padding(.vertical, 3)
                         .background(state.showIsoGridDebug ? accentGreen : bgCard)
                         .foregroundColor(textMain)
                         .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
 
                         Spacer()
-                        Button("锁定") { state.setAdminMode(false) }
+                        Button(TerrariumL10n.t("admin.lock_spawn")) { state.setAdminMode(false) }
                             .buttonStyle(.plain)
                             .font(.system(size: 10, design: .monospaced))
+                            .lineLimit(1).minimumScaleFactor(0.8)
                             .padding(.horizontal, 6).padding(.vertical, 3)
                             .background(bgCard).foregroundColor(textMuted)
                             .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
                     }
                     HStack(spacing: 4) {
-                        Text("⏩ 加速:")
+                        Text(TerrariumL10n.t("admin.speed_label"))
                             .font(.system(size: 9.5, design: .monospaced))
                             .foregroundColor(adminAmber)
+                            .lineLimit(1)
                         ForEach([1.0, 10.0, 60.0, 300.0], id: \.self) { scale in
                             Button("\(Int(scale))x") {
                                 state.setAdminTimeScale(scale)
@@ -753,19 +856,19 @@ struct MenuBarPopoverView: View {
                             .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
                         }
                         Spacer()
-                        Button("+10m") { state.fastForwardDebug(seconds: 600) }
+                        Button(TerrariumL10n.t("admin.ff_10m")) { state.fastForwardDebug(seconds: 600) }
                             .buttonStyle(.plain)
                             .font(.system(size: 9.5, design: .monospaced))
                             .padding(.horizontal, 5).padding(.vertical, 2)
                             .background(bgCard).foregroundColor(textMain)
                             .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
-                        Button("+1h") { state.fastForwardDebug(seconds: 3600) }
+                        Button(TerrariumL10n.t("admin.ff_1h")) { state.fastForwardDebug(seconds: 3600) }
                             .buttonStyle(.plain)
                             .font(.system(size: 9.5, design: .monospaced))
                             .padding(.horizontal, 5).padding(.vertical, 2)
                             .background(bgCard).foregroundColor(textMain)
                             .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
-                        Button("+8h") { state.fastForwardDebug(seconds: 8 * 3600) }
+                        Button(TerrariumL10n.t("admin.ff_8h")) { state.fastForwardDebug(seconds: 8 * 3600) }
                             .buttonStyle(.plain)
                             .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                             .padding(.horizontal, 5).padding(.vertical, 2)
@@ -774,7 +877,8 @@ struct MenuBarPopoverView: View {
                     }
                     if state.adminSimulatedElapsedSeconds > 0 {
                         let mins = Int(state.adminSimulatedElapsedSeconds / 60.0)
-                        Text("虚拟时钟已推进: \(mins >= 60 ? "\(mins / 60)h \(mins % 60)m" : "\(mins)m")（不影响真实存档时间）")
+                        let elapsedLabel = mins >= 60 ? "\(mins / 60)h \(mins % 60)m" : "\(mins)m"
+                        Text(TerrariumL10n.t("admin.virtual_clock", ["elapsed": elapsedLabel]))
                             .font(.system(size: 9.5, design: .monospaced))
                             .foregroundColor(textMuted)
                     }
@@ -795,14 +899,25 @@ struct MenuBarPopoverView: View {
         onPlus: @escaping () -> Void
     ) -> some View {
         VStack(spacing: 3) {
-            HStack {
-                Text(label).foregroundColor(textMuted)
-                Spacer()
-                Text(value).bold().foregroundColor(textMain)
+            HStack(spacing: 3) {
+                Text(label)
+                    .foregroundColor(textMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                Spacer(minLength: 2)
+                Text(value)
+                    .bold()
+                    .foregroundColor(textMain)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
-            HStack {
-                Text(hint).font(.system(size: 9.5, design: .monospaced)).foregroundColor(textMuted).lineLimit(1)
-                Spacer()
+            HStack(spacing: 3) {
+                Text(hint)
+                    .font(.system(size: 9.5, design: .monospaced))
+                    .foregroundColor(textMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                Spacer(minLength: 2)
                 if allowAdminButtons {
                     HStack(spacing: 4) {
                         miniBtn("-", action: onMinus)
@@ -819,8 +934,8 @@ struct MenuBarPopoverView: View {
     }
 
     private var appVersionLabel: String {
-        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.2.3"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "110"
         return "v\(short) (\(build))"
     }
 
@@ -832,13 +947,13 @@ struct MenuBarPopoverView: View {
         do {
             if SMAppService.mainApp.status == .enabled {
                 try SMAppService.mainApp.unregister()
-                state.bannerNotice = "已关闭开机自动启动"
+                state.bannerNotice = TerrariumL10n.t("settings.autostart_off")
             } else {
                 try SMAppService.mainApp.register()
-                state.bannerNotice = "✅ 已开启开机自动启动"
+                state.bannerNotice = TerrariumL10n.t("settings.autostart_on")
             }
         } catch {
-            state.bannerNotice = "⚠️ 需从 .app 打包应用运行以配置开机自启"
+            state.bannerNotice = TerrariumL10n.t("settings.autostart_need_app")
         }
     }
 
@@ -852,7 +967,7 @@ struct MenuBarPopoverView: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("⚙️ 游戏设置")
+                    Text(TerrariumL10n.t("settings.title"))
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                         .foregroundColor(textMain)
                     Spacer()
@@ -868,7 +983,7 @@ struct MenuBarPopoverView: View {
                 Divider().background(borderCol)
 
                 HStack {
-                    Text("游戏版本")
+                    Text(TerrariumL10n.t("settings.version_label"))
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(textMuted)
                     Spacer()
@@ -878,7 +993,7 @@ struct MenuBarPopoverView: View {
                 }
 
                 HStack {
-                    Text("存档格式")
+                    Text(TerrariumL10n.t("settings.schema_label"))
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(textMuted)
                     Spacer()
@@ -888,11 +1003,65 @@ struct MenuBarPopoverView: View {
                 }
 
                 HStack {
-                    Text("开机自启")
+                    Text(TerrariumL10n.t("settings.language_label"))
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(textMuted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Spacer(minLength: 6)
+                    Menu {
+                        Button {
+                            state.setLanguagePreference(.system)
+                        } label: {
+                            let sysTitle = TerrariumL10n.t("settings.language_system", [
+                                "lang": TerrariumL10n.resolveSystemLanguage().nativeDisplayName
+                            ])
+                            Text(state.languagePreference == .system ? "✓ \(sysTitle)" : sysTitle)
+                        }
+                        Divider()
+                        ForEach(SupportedLanguage.allCases) { lang in
+                            let pref = AppLanguagePreference(rawValue: lang.rawValue) ?? .system
+                            Button {
+                                state.setLanguagePreference(pref)
+                            } label: {
+                                Text(state.languagePreference == pref ? "✓ \(lang.nativeDisplayName)" : lang.nativeDisplayName)
+                            }
+                        }
+                    } label: {
+                        let currentLabel: String = {
+                            if state.languagePreference == .system {
+                                return TerrariumL10n.t("settings.language_system", [
+                                    "lang": state.activeLanguage.nativeDisplayName
+                                ])
+                            }
+                            return state.activeLanguage.nativeDisplayName
+                        }()
+                        HStack(spacing: 4) {
+                            Text(currentLabel)
+                                .font(.system(size: 10.5, weight: .bold, design: .monospaced))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.78)
+                            Text("▾")
+                                .font(.system(size: 9.5, design: .monospaced))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(bgCard)
+                        .foregroundColor(adminAmber)
+                        .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
+
+                HStack {
+                    Text(TerrariumL10n.t("settings.launch_at_login"))
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(textMuted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                     Spacer()
-                    Button(isLaunchAtLoginEnabled ? "已开启" : "未开启") {
+                    Button(TerrariumL10n.t(isLaunchAtLoginEnabled ? "settings.enabled" : "settings.disabled")) {
                         toggleLaunchAtLogin()
                     }
                     .buttonStyle(.plain)
@@ -910,7 +1079,7 @@ struct MenuBarPopoverView: View {
                     Button {
                         state.isConfirmingResetSave = true
                     } label: {
-                        Text("重置存档（新开局）")
+                        Text(TerrariumL10n.t("settings.reset_save"))
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 6)
@@ -921,11 +1090,11 @@ struct MenuBarPopoverView: View {
                     .buttonStyle(.plain)
                 } else {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("⚠️ 将清空所有生态缸、生态点与图鉴，恢复 Day 0 初始状态，确认重置？")
+                        Text(TerrariumL10n.t("settings.reset_confirm_msg"))
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(Color(red: 0.99, green: 0.80, blue: 0.76))
                         HStack(spacing: 8) {
-                            Button("确认重置") {
+                            Button(TerrariumL10n.t("settings.reset_confirm_btn")) {
                                 state.resetSaveData()
                                 state.isConfirmingResetSave = false
                                 state.isShowingSettings = false
@@ -938,7 +1107,7 @@ struct MenuBarPopoverView: View {
                             .foregroundColor(.white)
                             .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
 
-                            Button("取消") {
+                            Button(TerrariumL10n.t("ui.common.cancel")) {
                                 state.isConfirmingResetSave = false
                             }
                             .buttonStyle(.plain)
@@ -953,7 +1122,7 @@ struct MenuBarPopoverView: View {
                 }
             }
             .padding(12)
-            .frame(width: 310)
+            .frame(width: 340)
             .background(bgHeader)
             .overlay(Rectangle().stroke(borderCol, lineWidth: 2))
         }
@@ -964,15 +1133,15 @@ struct MenuBarPopoverView: View {
             Color.black.opacity(0.55)
                 .onTapGesture { state.isShowingRenameTankSheet = false }
             VStack(alignment: .leading, spacing: 10) {
-                Text("重命名当前生态缸")
+                Text(TerrariumL10n.t("ui.rename_tank.title"))
                     .font(.system(size: 12.5, weight: .bold, design: .monospaced))
                     .foregroundColor(textMain)
-                TextField("最多 16 字", text: $state.renameTankDraft)
+                TextField(TerrariumL10n.t("ui.rename_tank.placeholder"), text: $state.renameTankDraft)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 12, design: .monospaced))
                 HStack {
                     Spacer()
-                    Button("取消") {
+                    Button(TerrariumL10n.t("ui.common.cancel")) {
                         state.isShowingRenameTankSheet = false
                     }
                     .buttonStyle(.plain)
@@ -983,7 +1152,7 @@ struct MenuBarPopoverView: View {
                     .foregroundColor(textMuted)
                     .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
 
-                    Button("保存") {
+                    Button(TerrariumL10n.t("ui.common.save")) {
                         state.renameActiveContainer(to: state.renameTankDraft)
                         state.isShowingRenameTankSheet = false
                     }
@@ -997,7 +1166,7 @@ struct MenuBarPopoverView: View {
                 }
             }
             .padding(12)
-            .frame(width: 280)
+            .frame(width: 300)
             .background(bgHeader)
             .overlay(Rectangle().stroke(borderCol, lineWidth: 2))
         }
@@ -1008,15 +1177,16 @@ struct MenuBarPopoverView: View {
             Color.black.opacity(0.55)
                 .onTapGesture { state.renamingCritterKind = nil }
             VStack(alignment: .leading, spacing: 10) {
-                Text("为「\(kind.rawValue)」起昵称")
+                Text(TerrariumL10n.t("ui.rename_critter.title", ["kind": kind.localizedName]))
                     .font(.system(size: 12.5, weight: .bold, design: .monospaced))
                     .foregroundColor(textMain)
-                TextField("最多 14 字", text: $state.renameCritterDraft)
+                    .lineLimit(2)
+                TextField(TerrariumL10n.t("ui.rename_critter.placeholder"), text: $state.renameCritterDraft)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 12, design: .monospaced))
                 HStack {
                     Spacer()
-                    Button("取消") {
+                    Button(TerrariumL10n.t("ui.common.cancel")) {
                         state.renamingCritterKind = nil
                     }
                     .buttonStyle(.plain)
@@ -1027,7 +1197,7 @@ struct MenuBarPopoverView: View {
                     .foregroundColor(textMuted)
                     .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
 
-                    Button("保存") {
+                    Button(TerrariumL10n.t("ui.common.save")) {
                         state.renameCritter(kind: kind, to: state.renameCritterDraft)
                         state.renamingCritterKind = nil
                     }
@@ -1041,7 +1211,7 @@ struct MenuBarPopoverView: View {
                 }
             }
             .padding(12)
-            .frame(width: 280)
+            .frame(width: 300)
             .background(bgHeader)
             .overlay(Rectangle().stroke(borderCol, lineWidth: 2))
         }
@@ -1061,12 +1231,15 @@ struct MenuBarPopoverView: View {
 
     private func pixelActionButton(icon: String, title: String, highlighted: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 PixelAssetLoader.swiftUIImage(named: icon)
                     .frame(width: 14, height: 14)
                 Text(title)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
             }
+            .padding(.horizontal, 4)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
             .background(highlighted ? Color(red: 0.96, green: 0.62, blue: 0.04) : bgHeader)
@@ -1080,7 +1253,7 @@ struct MenuBarPopoverView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("\(state.currentBiome.rawValue)专属生态摆件")
+                    Text(TerrariumL10n.t("ui.decor_tab.header", ["biome": state.currentBiome.localizedName]))
                         .font(.system(size: 11.5, weight: .bold, design: .monospaced))
                         .foregroundColor(textMain)
                     Spacer()
@@ -1096,7 +1269,7 @@ struct MenuBarPopoverView: View {
                         default: return nil
                         }
                     }()
-                    HStack(spacing: 10) {
+                    HStack(spacing: 8) {
                         PixelAssetLoader.previewSwiftUIImage(named: item.assetName, frameSize: frameSize)
                             .resizable()
                             .interpolation(.none)
@@ -1108,49 +1281,61 @@ struct MenuBarPopoverView: View {
                             Text(item.name)
                                 .font(.system(size: 12, weight: .bold, design: .monospaced))
                                 .foregroundColor(textMain)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                             Text(item.nicheDescription)
                                 .font(.system(size: 10, design: .monospaced))
                                 .foregroundColor(textMuted)
-                                .lineLimit(2)
+                                .lineLimit(3)
                         }
-                        Spacer()
+                        Spacer(minLength: 4)
                         if item.unlocked {
-                            if item.enabled {
-                                Button("摆位") {
-                                    state.currentTab = .terrarium
-                                    state.beginMoveDecor(item.id)
+                            HStack(spacing: 4) {
+                                if item.enabled {
+                                    Button(TerrariumL10n.t("ui.decor_tab.reposition")) {
+                                        state.currentTab = .terrarium
+                                        state.beginMoveDecor(item.id)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .font(.system(size: 10.5, design: .monospaced))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.78)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 4)
+                                    .background(bgCard)
+                                    .foregroundColor(adminAmber)
+                                    .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                                }
+                                Button(TerrariumL10n.t(item.enabled ? "ui.decor_tab.placed" : "ui.decor_tab.stowed")) {
+                                    state.handleDecorAction(id: item.id)
                                 }
                                 .buttonStyle(.plain)
                                 .font(.system(size: 10.5, design: .monospaced))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.78)
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 4)
-                                .background(bgCard)
-                                .foregroundColor(adminAmber)
+                                .background(item.enabled ? accentGreen : bgCard)
+                                .foregroundColor(item.enabled ? .white : textMuted)
                                 .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
                             }
-                            Button(item.enabled ? "已摆放" : "已收起") {
-                                state.handleDecorAction(id: item.id)
-                            }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 11, design: .monospaced))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(item.enabled ? accentGreen : bgCard)
-                            .foregroundColor(item.enabled ? .white : textMuted)
-                            .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                            .layoutPriority(1)
                         } else {
                             let canAfford = state.ecoPoints >= item.cost
-                            Button("解锁 (\(item.cost)点)") {
+                            Button(TerrariumL10n.t("ui.decor_tab.unlock", ["cost": "\(item.cost)"])) {
                                 state.handleDecorAction(id: item.id)
                             }
                             .buttonStyle(.plain)
                             .disabled(!canAfford)
-                            .font(.system(size: 11, design: .monospaced))
-                            .padding(.horizontal, 8)
+                            .font(.system(size: 10.5, design: .monospaced))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.78)
+                            .padding(.horizontal, 7)
                             .padding(.vertical, 4)
                             .background(canAfford ? adminAmber : bgCard)
                             .foregroundColor(canAfford ? .black : textMuted.opacity(0.5))
                             .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                            .layoutPriority(1)
                         }
                     }
                     .padding(8)
@@ -1161,7 +1346,7 @@ struct MenuBarPopoverView: View {
                 Divider().background(borderCol).padding(.vertical, 2)
 
                 HStack {
-                    Text("缸体边框皮肤（全缸通用）")
+                    Text(TerrariumL10n.t("ui.decor_tab.skins_header"))
                         .font(.system(size: 11.5, weight: .bold, design: .monospaced))
                         .foregroundColor(textMain)
                     Spacer()
@@ -1180,16 +1365,24 @@ struct MenuBarPopoverView: View {
                                 Text(skin.displayName)
                                     .font(.system(size: 11.5, weight: .bold, design: .monospaced))
                                     .foregroundColor(textMain)
-                                Text(isUnlocked ? (isActive ? "当前已启用" : "已解锁，点击即可切换") : "解锁消耗：\(skin.cost) 生态点")
+                                Text(isUnlocked
+                                     ? TerrariumL10n.t(isActive ? "ui.decor_tab.skin_active_desc" : "ui.decor_tab.skin_unlocked_desc")
+                                     : TerrariumL10n.t("ui.decor_tab.skin_locked_desc", ["cost": "\(skin.cost)"]))
                                     .font(.system(size: 9.5, design: .monospaced))
                                     .foregroundColor(textMuted)
                             }
-                            Spacer()
+                            Spacer(minLength: 4)
                             Button {
                                 state.purchaseOrSelectFrameSkin(skin)
                             } label: {
-                                Text(isActive ? "使用中" : (isUnlocked ? "切换" : "\(skin.cost) 点解锁"))
+                                Text(isActive
+                                     ? TerrariumL10n.t("ui.decor_tab.skin_in_use")
+                                     : (isUnlocked
+                                        ? TerrariumL10n.t("ui.decor_tab.skin_switch")
+                                        : TerrariumL10n.t("ui.decor_tab.skin_unlock", ["cost": "\(skin.cost)"])))
                                     .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
                                     .background(isActive ? adminAmber : (isUnlocked ? bgCard : accentGreen))
@@ -1198,6 +1391,7 @@ struct MenuBarPopoverView: View {
                             }
                             .buttonStyle(.plain)
                             .disabled(isActive || (!isUnlocked && state.ecoPoints < skin.cost))
+                            .layoutPriority(1)
                         }
                         .padding(6)
                         .background(bgHeader)
@@ -1221,13 +1415,17 @@ struct MenuBarPopoverView: View {
     private var crittersTabContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("\(state.currentBiome.rawValue)生物领养与轮换")
+                HStack(spacing: 6) {
+                    Text(TerrariumL10n.t("ui.critters.header", ["biome": state.currentBiome.localizedName]))
                         .font(.system(size: 11.5, weight: .bold, design: .monospaced))
                         .foregroundColor(textMain)
-                    Spacer()
-                    Text(state.activeFoodChainGroup?.rawValue ?? "空缸待入驻")
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Spacer(minLength: 4)
+                    Text(state.activeFoodChainGroup?.localizedName ?? TerrariumL10n.t("ui.critters.empty_group"))
                         .font(.system(size: 10, design: .monospaced))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(bgCard)
@@ -1238,11 +1436,11 @@ struct MenuBarPopoverView: View {
                 let chainRuleText: String = {
                     switch state.currentBiome {
                     case .aquatic:
-                        return "⚖️ 食物链规则：半月斗鱼领地性强需单缸独养；蓝螯虾不可与鱼虾混养，切换入缸时冲突物种会自动安全存仓。"
+                        return TerrariumL10n.t("ui.critters.rule_aquatic")
                     case .rainforest:
-                        return "⚖️ 食物链规则：变色龙不可与雨林拟态虫群混养；切换入缸时冲突物种会自动安全存仓。"
+                        return TerrariumL10n.t("ui.critters.rule_rainforest")
                     default:
-                        return "⚖️ 食物链规则：捕食者（树蛙 / 沙守宫）不可与小型昆虫/蜗牛同放一缸；切换入缸时冲突物种会自动安全存仓。"
+                        return TerrariumL10n.t("ui.critters.rule_default")
                     }
                 }()
                 Text(chainRuleText)
@@ -1257,7 +1455,7 @@ struct MenuBarPopoverView: View {
                     let conflictsActive = !isInTank && (state.activeFoodChainGroup != nil && state.activeFoodChainGroup != spec.group)
                     let canBuy = elig.eligible && state.ecoPoints >= spec.cost
 
-                    HStack(spacing: 10) {
+                    HStack(spacing: 8) {
                         PixelAssetLoader.previewSwiftUIImage(
                             named: spec.assetName,
                             frameSize: CGSize(width: spec.frameWidth, height: spec.frameHeight)
@@ -1270,16 +1468,18 @@ struct MenuBarPopoverView: View {
                         .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
 
                         VStack(alignment: .leading, spacing: 3) {
-                            HStack(spacing: 5) {
+                            HStack(spacing: 4) {
                                 let labelName: String = {
                                     if let owned, let nick = owned.nickname, !nick.isEmpty, nick != spec.name {
-                                        return "\(spec.name)「\(nick)」"
+                                        return TerrariumL10n.t("ui.critters.name_with_nick", ["name": spec.name, "nick": nick])
                                     }
                                     return spec.name
                                 }()
                                 Text(labelName)
-                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                    .font(.system(size: 11.5, weight: .bold, design: .monospaced))
                                     .foregroundColor(textMain)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.78)
                                 if let owned {
                                     Button("✏️") {
                                         state.renameCritterDraft = owned.nickname ?? spec.name
@@ -1287,21 +1487,33 @@ struct MenuBarPopoverView: View {
                                     }
                                     .buttonStyle(.plain)
                                     .font(.system(size: 10))
-                                    .help("自定义昵称")
+                                    .help(TerrariumL10n.t("ui.critters.rename_help"))
                                     let stage = TerrariumConfig.affinityStage(for: owned.affinity)
-                                    Text("♥\(owned.affinity)/\(TerrariumConfig.maxAffinity) · \(stage.title)")
+                                    Text(TerrariumL10n.t("ui.critters.affinity_line", [
+                                        "val": "\(owned.affinity)",
+                                        "max": "\(TerrariumConfig.maxAffinity)",
+                                        "stage": stage.title
+                                    ]))
                                         .font(.system(size: 9.5, design: .monospaced))
                                         .foregroundColor(stage == .soulmate ? adminAmber : Color(red: 0.99, green: 0.68, blue: 0.74))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.75)
                                 }
                             }
                             if let owned {
                                 let stage = TerrariumConfig.affinityStage(for: owned.affinity)
-                                Text("性格：\(owned.personality) · \(TerrariumConfig.perkDescription(for: owned.personality, stage: stage))")
+                                Text(TerrariumL10n.t("ui.critters.personality_line", [
+                                    "personality": TerrariumConfig.localizedPersonality(for: owned.personality),
+                                    "perk": TerrariumConfig.perkDescription(for: owned.personality, stage: stage)
+                                ]))
                                     .font(.system(size: 9.5, design: .monospaced))
                                     .foregroundColor(Color(red: 0.99, green: 0.80, blue: 0.84))
                                     .fixedSize(horizontal: false, vertical: true)
                             }
-                            Text("条件：\(spec.unlockConditionText) · \(elig.eligible ? "已达标" : elig.missingReason)")
+                            Text(TerrariumL10n.t("ui.critters.condition_line", [
+                                "cond": spec.unlockConditionText,
+                                "status": elig.missingReason
+                            ]))
                                 .font(.system(size: 9.8, design: .monospaced))
                                 .foregroundColor(elig.eligible ? Color(red: 0.65, green: 0.92, blue: 0.68) : textMuted)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -1314,31 +1526,35 @@ struct MenuBarPopoverView: View {
                         Spacer(minLength: 4)
 
                         if owned != nil {
-                            Button(isInTank ? "在缸中 · 收起" : (conflictsActive ? "换入(存仓旧群)" : "放入生态箱")) {
+                            Button(TerrariumL10n.t(isInTank ? "ui.critters.btn_stow" : (conflictsActive ? "ui.critters.btn_swap" : "ui.critters.btn_place"))) {
                                 state.critterPurchaseAndToggle(spec.kind)
                             }
                             .buttonStyle(.plain)
-                            .fixedSize(horizontal: true, vertical: false)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                             .disabled(!isInTank && !elig.eligible)
-                            .font(.system(size: 10.5, design: .monospaced))
-                            .padding(.horizontal, 8)
+                            .font(.system(size: 10, design: .monospaced))
+                            .padding(.horizontal, 7)
                             .padding(.vertical, 4)
                             .background(isInTank ? accentGreen : (elig.eligible ? bgCard : bgCard.opacity(0.5)))
                             .foregroundColor(isInTank ? .white : (elig.eligible ? textMain : textMuted.opacity(0.5)))
                             .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                            .layoutPriority(1)
                         } else {
-                            Button("领养 (\(spec.cost)点)") {
+                            Button(TerrariumL10n.t("ui.critters.btn_adopt", ["cost": "\(spec.cost)"])) {
                                 state.critterPurchaseAndToggle(spec.kind)
                             }
                             .buttonStyle(.plain)
-                            .fixedSize(horizontal: true, vertical: false)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                             .disabled(!canBuy)
-                            .font(.system(size: 10.5, design: .monospaced))
-                            .padding(.horizontal, 8)
+                            .font(.system(size: 10, design: .monospaced))
+                            .padding(.horizontal, 7)
                             .padding(.vertical, 4)
                             .background(canBuy ? adminAmber : bgCard)
                             .foregroundColor(canBuy ? .black : textMuted.opacity(0.5))
                             .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                            .layoutPriority(1)
                         }
                     }
                     .padding(8)
@@ -1352,32 +1568,47 @@ struct MenuBarPopoverView: View {
     private var codexTabContent: some View {
         ScrollView {
             VStack(spacing: 6) {
-                HStack(spacing: 6) {
-                    Text("当前佩戴：\(state.codexMilestoneTitle)")
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(TerrariumL10n.t("ui.codex.equipped_prefix", ["title": state.codexMilestoneTitle]))
                         .font(.system(size: 11.5, weight: .bold, design: .monospaced))
                         .foregroundColor(adminAmber)
-                    Spacer()
-                    Button("物种图鉴 (\(state.unlockedCodexCount)/\(state.codexEntries.count))") {
-                        state.isShowingAchievementsInCodexTab = false
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(!state.isShowingAchievementsInCodexTab ? accentGreen : bgCard)
-                    .foregroundColor(!state.isShowingAchievementsInCodexTab ? .white : textMuted)
-                    .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    HStack(spacing: 6) {
+                        Button(TerrariumL10n.t("ui.codex.tab_species", [
+                            "unlocked": "\(state.unlockedCodexCount)",
+                            "total": "\(state.codexEntries.count)"
+                        ])) {
+                            state.isShowingAchievementsInCodexTab = false
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 4)
+                        .background(!state.isShowingAchievementsInCodexTab ? accentGreen : bgCard)
+                        .foregroundColor(!state.isShowingAchievementsInCodexTab ? .white : textMuted)
+                        .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
 
-                    Button("成就称号 (\(state.unlockedAchievementIDs.count)/\(TerrariumConfig.defaultAchievements.count))") {
-                        state.isShowingAchievementsInCodexTab = true
+                        Button(TerrariumL10n.t("ui.codex.tab_achievements", [
+                            "unlocked": "\(state.unlockedAchievementIDs.count)",
+                            "total": "\(TerrariumConfig.defaultAchievements.count)"
+                        ])) {
+                            state.isShowingAchievementsInCodexTab = true
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 4)
+                        .background(state.isShowingAchievementsInCodexTab ? accentGreen : bgCard)
+                        .foregroundColor(state.isShowingAchievementsInCodexTab ? .white : textMuted)
+                        .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
                     }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(state.isShowingAchievementsInCodexTab ? accentGreen : bgCard)
-                    .foregroundColor(state.isShowingAchievementsInCodexTab ? .white : textMuted)
-                    .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
                 }
                 .padding(8)
                 .background(bgHeader)
@@ -1386,40 +1617,48 @@ struct MenuBarPopoverView: View {
                 if state.isShowingAchievementsInCodexTab {
                     ForEach(TerrariumConfig.defaultAchievements) { ach in
                         let isUnlocked = state.unlockedAchievementIDs.contains(ach.id)
-                        let isEquipped = (state.codexMilestoneTitle == ach.title)
+                        let isEquipped = state.isAchievementEquipped(ach.id)
                         HStack(spacing: 8) {
                             VStack(alignment: .leading, spacing: 3) {
                                 HStack(spacing: 6) {
                                     Text("\(isUnlocked ? "🏅" : "🔒") \(ach.title)")
                                         .font(.system(size: 11.5, weight: .bold, design: .monospaced))
                                         .foregroundColor(isUnlocked ? adminAmber : textMain)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
                                     Text(ach.category)
                                         .font(.system(size: 9.5, design: .monospaced))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
                                         .padding(.horizontal, 5)
                                         .padding(.vertical, 1)
                                         .background(bgCard)
                                         .foregroundColor(textMuted)
-                                    Text("+\(ach.rewardPoints) 点")
+                                    Text(TerrariumL10n.t("ui.codex.reward_pts", ["pts": "\(ach.rewardPoints)"]))
                                         .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                                         .foregroundColor(isUnlocked ? accentGreen : textMuted)
+                                        .lineLimit(1)
                                 }
-                                Text("条件：\(ach.conditionDesc)")
+                                Text(TerrariumL10n.t("ui.codex.ach_cond", ["cond": ach.conditionDesc]))
                                     .font(.system(size: 10, design: .monospaced))
                                     .foregroundColor(textMuted)
                             }
-                            Spacer()
+                            Spacer(minLength: 4)
                             if isUnlocked {
-                                Button(isEquipped ? "佩戴中" : "佩戴") {
+                                Button(TerrariumL10n.t(isEquipped ? "ui.codex.equipped_btn" : "ui.codex.equip_btn")) {
                                     state.equipTitle(ach.id)
                                 }
                                 .buttonStyle(.plain)
                                 .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .background(isEquipped ? adminAmber : accentGreen)
                                 .foregroundColor(isEquipped ? .black : .white)
                                 .overlay(Rectangle().stroke(borderCol, lineWidth: 1))
                                 .disabled(isEquipped)
+                                .layoutPriority(1)
                             }
                         }
                         .padding(8)
@@ -1434,26 +1673,22 @@ struct MenuBarPopoverView: View {
                             Text("\(entry.unlocked ? "✅" : "🔒") \(entry.name) · \(entry.category)")
                                 .font(.system(size: 11.5, weight: .bold, design: .monospaced))
                                 .foregroundColor(textMain)
-                            Spacer()
-                            let biomeLabel: String = {
-                                switch entry.biome {
-                                case .meadow: return "苔原"
-                                case .sand: return "沙地"
-                                case .rainforest: return "雨林"
-                                case .aquatic: return "水域"
-                                }
-                            }()
-                            Text(biomeLabel)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.78)
+                            Spacer(minLength: 4)
+                            Text(entry.biome.localizedShortName)
                                 .font(.system(size: 9.5, design: .monospaced))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 1)
                                 .background(bgCard)
                                 .foregroundColor(textMuted)
                         }
-                        Text("条件：\(entry.condition)")
+                        Text(TerrariumL10n.t("ui.codex.entry_cond", ["cond": entry.condition]))
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(textMuted)
-                        Text(entry.unlocked ? entry.desc : "满足生态位摆件、特殊植物与气候条件后解锁。")
+                        Text(entry.unlocked ? entry.desc : TerrariumL10n.t("ui.codex.locked_desc"))
                             .font(.system(size: 10.5, design: .monospaced))
                             .foregroundColor(textMain.opacity(0.85))
                     }

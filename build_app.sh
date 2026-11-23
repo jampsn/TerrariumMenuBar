@@ -12,6 +12,7 @@ mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 
 cp "$BUILD_DIR/release/TerrariumMenuBar" "$APP_DIR/Contents/MacOS/TerrariumMenuBar"
 cp -R "$BUILD_DIR/release/TerrariumMenuBar_TerrariumMenuBar.bundle" "$APP_DIR/Contents/Resources/"
+cp -R "$BUILD_DIR/release/TerrariumMenuBar_TerrariumCore.bundle" "$APP_DIR/Contents/Resources/"
 
 if [ -f "$SCRIPT_DIR/Sources/TerrariumMenuBar/Resources/AppIcon.icns" ]; then
   cp "$SCRIPT_DIR/Sources/TerrariumMenuBar/Resources/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
@@ -23,7 +24,18 @@ cat > "$APP_DIR/Contents/Info.plist" << 'EOF'
 <plist version="1.0">
 <dict>
   <key>CFBundleDevelopmentRegion</key>
-  <string>zh_CN</string>
+  <string>en</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>zh-Hans</string>
+    <string>zh-Hant</string>
+    <string>en</string>
+    <string>ja</string>
+    <string>ko</string>
+    <string>es</string>
+    <string>de</string>
+    <string>fr</string>
+  </array>
   <key>CFBundleExecutable</key>
   <string>TerrariumMenuBar</string>
   <key>CFBundleIconFile</key>
@@ -37,9 +49,9 @@ cat > "$APP_DIR/Contents/Info.plist" << 'EOF'
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>1.0.0</string>
+  <string>1.1.0</string>
   <key>CFBundleVersion</key>
-  <string>100</string>
+  <string>110</string>
   <key>LSMinimumSystemVersion</key>
   <string>13.0</string>
   <key>LSUIElement</key>

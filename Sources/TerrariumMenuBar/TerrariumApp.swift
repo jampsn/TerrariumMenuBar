@@ -98,6 +98,17 @@ struct TerrariumMenuBarApp: App {
             Foundation.exit(1)
         }
 
+        guard let baseLocaleTable = TerrariumL10n.rawTable(for: .zhHans), !baseLocaleTable.isEmpty else {
+            fputs("SELF_TEST_FAIL: Missing base locale zh-Hans.json\n", stderr)
+            Foundation.exit(1)
+        }
+        for lang in SupportedLanguage.allCases {
+            guard let table = TerrariumL10n.rawTable(for: lang), table.count == baseLocaleTable.count else {
+                fputs("SELF_TEST_FAIL: Locale bundle load or key count mismatch for \(lang.rawValue)\n", stderr)
+                Foundation.exit(1)
+            }
+        }
+
         guard PixelAssetLoader.spriteSheetFrame(named: "env_shallow_pool", frameIndex: 1, frameSize: CGSize(width: 44, height: 24)) != nil,
               PixelAssetLoader.spriteSheetFrame(named: "env_food_bowl", frameIndex: 2, frameSize: CGSize(width: 18, height: 12)) != nil,
               PixelAssetLoader.spriteSheetFrame(named: "env_pebbles", frameIndex: 1, frameSize: CGSize(width: 28, height: 16)) != nil,
@@ -319,7 +330,7 @@ struct TerrariumMenuBarApp: App {
         }
         animator.stop()
 
-        print("SELF_TEST_PASS: All \(expectedAssets.count) assets, Day-0 cold start, visitor attraction, multi-terrarium isolation & Y-Sort verified (ticks=\(animator.tick), plants=\(state.plants.count), critters=\(state.activeDisplayCritters.count)).")
+        print("SELF_TEST_PASS: All \(expectedAssets.count) assets, \(SupportedLanguage.allCases.count) locales verified, Day-0 cold start, visitor attraction, multi-terrarium isolation & Y-Sort verified (ticks=\(animator.tick), plants=\(state.plants.count), critters=\(state.activeDisplayCritters.count)).")
         Foundation.exit(0)
     }
 }

@@ -24,6 +24,8 @@ private func runTest(_ name: String, _ block: () -> Void) {
 
 // MARK: - 独立多生态缸、零起点成长与食盆槽位寻路测试
 
+TerrariumL10n.setOverrideLanguage(.zhHans)
+
 runTest("test_day0EmptyStart_startsWithNoPlantsCrittersOrCodex") {
     let save = TerrariumSaveData()
     let meadow = save.containers.first?.instance
@@ -648,6 +650,143 @@ runTest("test_idleDaysCalculation_andTankCreatedAt") {
     let fresh = TerrariumSaveData(lastSavedAt: day3, firstStartedAt: day3)
     check(TerrariumConfig.elapsedDays(from: fresh.firstStartedAt, to: day3, calendar: cal) == 0, "重置后挂机天数应归 0")
     check(TerrariumConfig.elapsedDays(from: fresh.containers[0].createdAt, to: day3, calendar: cal) == 0, "重置后首缸独立天数应归 0")
+}
+
+runTest("test_i18n_all8LanguagesKeyAndPlaceholderParity") {
+    check(SupportedLanguage.allCases.count == 8, "应精确支持 8 种语言")
+
+    guard let baseTable = TerrariumL10n.rawTable(for: .zhHans), !baseTable.isEmpty else {
+        check(false, "未能加载基准语言 zh-Hans.json")
+        return
+    }
+    let baseKeys = Set(baseTable.keys)
+    let placeholderRegex = try! NSRegularExpression(pattern: "\\{[a-zA-Z0-9_]+\\}")
+
+    func extractPlaceholders(_ text: String) -> Set<String> {
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        return Set(placeholderRegex.matches(in: text, range: range).compactMap { match in
+            Range(match.range, in: text).map { String(text[$0]) }
+        })
+    }
+
+    func containsHanzi(_ text: String) -> Bool {
+        text.unicodeScalars.contains { scalar in
+            scalar.value >= 0x4E00 && scalar.value <= 0x9FFF
+        }
+    }
+
+    for lang in SupportedLanguage.allCases {
+        guard let table = TerrariumL10n.rawTable(for: lang), !table.isEmpty else {
+            check(false, "未能加载语言包: \(lang.rawValue)")
+            continue
+        }
+        check(Set(table.keys) == baseKeys, "\(lang.rawValue) Key 集合应与 zh-Hans 一致")
+        for (k, v) in table {
+            check(!v.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "\(lang.rawValue).\(k) 不可为空")
+            if let baseVal = baseTable[k] {
+                check(extractPlaceholders(v) == extractPlaceholders(baseVal), "\(lang.rawValue).\(k) 占位符不一致")
+            }
+            if [.en, .ko, .es, .de, .fr].contains(lang) {
+                check(!containsHanzi(v), "\(lang.rawValue).\(k) 不应残留汉字: \(v)")
+            }
+        }
+    }
+}
+
+runTest("test_i18n_runtimeSwitching_persistenceCompatibility_andSystemResolution") {
+    defer { TerrariumL10n.setOverrideLanguage(.zhHans) }
+
+    check(TerrariumL10n.resolveSystemLanguage(preferredLanguages: ["zh-Hant-TW"]) == .zhHant, "zh-Hant-TW 应解析为繁体中文")
+    check(TerrariumL10n.resolveSystemLanguage(preferredLanguages: ["zh-HK", "en"]) == .zhHant, "zh-HK 应解析为繁体中文")
+    check(TerrariumL10n.resolveSystemLanguage(preferredLanguages: ["zh-Hans-CN"]) == .zhHans, "zh-Hans-CN 应解析为简体中文")
+    check(TerrariumL10n.resolveSystemLanguage(preferredLanguages: ["ja-JP"]) == .ja, "ja-JP 应解析为日语")
+    check(TerrariumL10n.resolveSystemLanguage(preferredLanguages: ["ko-KR"]) == .ko, "ko-KR 应解析为韩语")
+    check(TerrariumL10n.resolveSystemLanguage(preferredLanguages: ["es-MX"]) == .es, "es-MX 应解析为西语")
+    check(TerrariumL10n.resolveSystemLanguage(preferredLanguages: ["de-DE"]) == .de, "de-DE 应解析为德语")
+    check(TerrariumL10n.resolveSystemLanguage(preferredLanguages: ["fr-CA"]) == .fr, "fr-CA 应解析为法语")
+    check(TerrariumL10n.resolveSystemLanguage(preferredLanguages: ["en-GB"]) == .en, "en-GB 应解析为英语")
+    check(TerrariumL10n.resolveSystemLanguage(preferredLanguages: ["ru-RU"]) == .en, "未命中语种应回落英语")
+
+    for lang in SupportedLanguage.allCases {
+        TerrariumL10n.setOverrideLanguage(lang)
+        let codex = TerrariumConfig.defaultCodexEntries()
+        check(codex.count == 52, "\(lang.rawValue) 图鉴应保持 52 项")
+        for entry in codex {
+            check(!entry.name.contains("{") && !entry.name.hasPrefix("codex.") && !entry.name.hasPrefix("critter."), "\(lang.rawValue) 图鉴名未翻译: \(entry.id)")
+            check(!entry.category.contains("{") && !entry.condition.contains("{") && !entry.desc.contains("{"), "\(lang.rawValue) 图鉴存在未替换占位符: \(entry.id)")
+        }
+
+        let allDecor = TerrariumBiome.allCases.flatMap { TerrariumConfig.decorCatalog(for: $0) }
+        check(allDecor.count == 20, "\(lang.rawValue) 造景目录应保持 20 项")
+        for d in allDecor {
+            check(!d.name.hasPrefix("decor.") && !d.nicheDescription.contains("{"), "\(lang.rawValue) 造景异常: \(d.id)")
+        }
+
+        let allCritters = TerrariumBiome.allCases.flatMap { TerrariumConfig.critterShopCatalog(for: $0) }
+        check(allCritters.count == 25, "\(lang.rawValue) 生物商店目录应保持 25 项")
+        let emptyMeadow = TerrariumInstanceState.empty(biome: .meadow)
+        for c in allCritters {
+            check(!c.name.hasPrefix("critter.") && !c.unlockConditionText.contains("{") && !c.foodChainNote.contains("{"), "\(lang.rawValue) 生物目录异常: \(c.id)")
+            let elig = TerrariumSimulation.critterUnlockEligibility(kind: c.kind, instance: emptyMeadow)
+            check(!elig.missingReason.isEmpty && !elig.missingReason.contains("{") && !elig.missingReason.hasPrefix("elig."), "\(lang.rawValue) 资格文案异常: \(c.id)")
+        }
+
+        let achs = TerrariumConfig.defaultAchievements
+        check(achs.count == 14, "\(lang.rawValue) 成就应保持 14 项")
+        for a in achs {
+            check(!a.title.hasPrefix("ach.") && !a.conditionDesc.contains("{"), "\(lang.rawValue) 成就异常: \(a.id)")
+        }
+        check(TerrariumConfig.weatherEvents.count == 4, "\(lang.rawValue) 气候事件应保持 4 项")
+
+        let narrative = TerrariumConfig.soulmateMicroNarrative(nickname: "Mochi", kind: .treeFrog, localTempC: 12, atmosphere: .day)
+        check(narrative.contains("Mochi") && narrative.contains("12°C") && !narrative.contains("{"), "\(lang.rawValue) 挚友微叙事格式异常: \(narrative)")
+    }
+
+    for testLang in [SupportedLanguage.en, SupportedLanguage.de] {
+        TerrariumL10n.setOverrideLanguage(testLang)
+        check(TerrariumBiome.meadow.rawValue == "温润苔原缸", "\(testLang.rawValue) 下 TerrariumBiome.rawValue 不可变动")
+        check(ThermalMode.heating.rawValue == "加热", "\(testLang.rawValue) 下 ThermalMode.rawValue 不可变动")
+        check(SceneAtmosphere.rain.rawValue == "林间小雨", "\(testLang.rawValue) 下 SceneAtmosphere.rawValue 不可变动")
+        check(TerrariumConfig.defaultPersonality(for: .snail) == "慢性子", "\(testLang.rawValue) 下默认性格存储键不可变动")
+        check(TerrariumConfig.personalityPerk(for: "慢性子") == .thrifty, "\(testLang.rawValue) 下性格特技匹配不可受语言影响")
+
+        let legacyV3JSON = """
+        {
+          "schemaVersion": 3,
+          "currentBiome": "温润苔原缸",
+          "unlockedBiomes": ["温润苔原缸"],
+          "ecoPoints": 18,
+          "unlockedCodexIDs": ["moss"],
+          "lastSavedAt": 0,
+          "terrariums": {
+            "温润苔原缸": {
+              "biome": "温润苔原缸",
+              "atmosphere": "日间森林",
+              "temperature": 22,
+              "humidity": 65,
+              "isSleeping": false,
+              "foodBowlPortions": 1,
+              "glassFogLevel": 0.0,
+              "mistDewBoostSeconds": 0.0,
+              "plants": [],
+              "critters": [],
+              "unlockedDecorIDs": [],
+              "enabledDecorIDs": [],
+              "nextWeatherEventAt": 100,
+              "weatherCooldownEndAt": 0,
+              "accumulatedEcoSeconds": 0,
+              "accumulatedHumidityDecaySeconds": 0,
+              "ambientRelaxSeconds": 0,
+              "plantPulseSeconds": 0
+            }
+          }
+        }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        let decoded = try? decoder.decode(TerrariumSaveData.self, from: Data(legacyV3JSON.utf8))
+        check(decoded?.schemaVersion == 5 && decoded?.ecoPoints == 18 && decoded?.containers.count == 1, "\(testLang.rawValue) 下历史 v3 中文存档应无损迁移")
+    }
 }
 
 print("\nSummary: \(passedCount) passed, \(failedCount) failed.")

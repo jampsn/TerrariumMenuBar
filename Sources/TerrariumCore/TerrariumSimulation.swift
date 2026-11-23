@@ -376,167 +376,180 @@ public enum TerrariumSimulation {
             orchidCount: instance.plants.filter { $0.speciesID == "orchid" && $0.stage != .withered }.count
         )
 
+        func onlyBiome(_ biome: TerrariumBiome) -> (Bool, String) {
+            (false, TerrariumL10n.t("elig.only_biome", ["biome": biome.localizedName]))
+        }
+        func needDecor(_ id: String) -> (Bool, String) {
+            (false, TerrariumL10n.t("elig.need_decor", ["decor": TerrariumL10n.t("decor.\(id).name")]))
+        }
+        func needPlant(_ id: String, _ count: Int = 1) -> (Bool, String) {
+            (false, TerrariumL10n.t("elig.need_plant", ["plant": TerrariumL10n.t("codex.\(id).name"), "count": "\(count)"]))
+        }
+        func eligOK() -> (Bool, String) {
+            (true, TerrariumL10n.t("elig.ok"))
+        }
+
         switch kind {
         case .snail:
-            guard instance.biome == .meadow else { return (false, "仅限温润苔原缸") }
-            if mossCount < 1 { return (false, "需苔藓≥1") }
-            if instance.humidity < 45 { return (false, "需湿度≥45%") }
-            return (true, "条件已达标")
+            guard instance.biome == .meadow else { return onlyBiome(.meadow) }
+            if mossCount < 1 { return needPlant("moss") }
+            if instance.humidity < 45 { return (false, TerrariumL10n.t("elig.need_humidity_min", ["val": "45"])) }
+            return eligOK()
         case .pillBug:
-            guard instance.biome == .meadow else { return (false, "仅限温润苔原缸") }
-            if !instance.enabledDecorIDs.contains("driftwood") { return (false, "需摆放腐殖沉木") }
-            if mossCount < 1 { return (false, "需苔藓≥1") }
-            return (true, "条件已达标")
+            guard instance.biome == .meadow else { return onlyBiome(.meadow) }
+            if !instance.enabledDecorIDs.contains("driftwood") { return needDecor("driftwood") }
+            if mossCount < 1 { return needPlant("moss") }
+            return eligOK()
         case .rhinoBeetle:
-            guard instance.biome == .meadow else { return (false, "仅限温润苔原缸") }
-            if !instance.enabledDecorIDs.contains("driftwood") { return (false, "需摆放腐殖沉木") }
-            if fernCount < 1 { return (false, "需卷叶蕨≥1") }
-            if instance.humidity < 55 { return (false, "需湿度≥55%") }
-            return (true, "条件已达标")
+            guard instance.biome == .meadow else { return onlyBiome(.meadow) }
+            if !instance.enabledDecorIDs.contains("driftwood") { return needDecor("driftwood") }
+            if fernCount < 1 { return needPlant("fern") }
+            if instance.humidity < 55 { return (false, TerrariumL10n.t("elig.need_humidity_min", ["val": "55"])) }
+            return eligOK()
         case .treeFrog:
-            guard instance.biome == .meadow else { return (false, "仅限温润苔原缸") }
-            if !instance.enabledDecorIDs.contains("shallow_pool") { return (false, "需摆放溪石浅水洼") }
-            if fernCount < 1 { return (false, "需卷叶蕨≥1") }
-            if instance.humidity < 55 { return (false, "需湿度≥55%") }
-            return (true, "条件已达标")
+            guard instance.biome == .meadow else { return onlyBiome(.meadow) }
+            if !instance.enabledDecorIDs.contains("shallow_pool") { return needDecor("shallow_pool") }
+            if fernCount < 1 { return needPlant("fern") }
+            if instance.humidity < 55 { return (false, TerrariumL10n.t("elig.need_humidity_min", ["val": "55"])) }
+            return eligOK()
         case .fireNewt:
-            guard instance.biome == .meadow else { return (false, "仅限温润苔原缸") }
-            if !instance.enabledDecorIDs.contains("meadow_stepping_stones") { return (false, "需摆放溪涧汀步石") }
-            if !instance.enabledDecorIDs.contains("shallow_pool") { return (false, "需摆放溪石浅水洼") }
-            if instance.temperature > 21 { return (false, "需温度≤21°C") }
-            if instance.humidity < 68 { return (false, "需湿度≥68%") }
-            return (true, "条件已达标")
+            guard instance.biome == .meadow else { return onlyBiome(.meadow) }
+            if !instance.enabledDecorIDs.contains("meadow_stepping_stones") { return needDecor("meadow_stepping_stones") }
+            if !instance.enabledDecorIDs.contains("shallow_pool") { return needDecor("shallow_pool") }
+            if instance.temperature > 21 { return (false, TerrariumL10n.t("elig.need_temp_max", ["val": "21"])) }
+            if instance.humidity < 68 { return (false, TerrariumL10n.t("elig.need_humidity_min", ["val": "68"])) }
+            return eligOK()
         case .ladybug:
-            guard instance.biome == .meadow else { return (false, "仅限温润苔原缸") }
+            guard instance.biome == .meadow else { return onlyBiome(.meadow) }
             let cloverCount = instance.plants.filter { $0.speciesID == "clover" && $0.stage != .withered }.count
-            if cloverCount < 1 { return (false, "需三叶草≥1") }
-            if instance.humidity < 50 { return (false, "需湿度≥50%") }
-            return (true, "条件已达标")
+            if cloverCount < 1 { return needPlant("clover") }
+            if instance.humidity < 50 { return (false, TerrariumL10n.t("elig.need_humidity_min", ["val": "50"])) }
+            return eligOK()
         case .amberBeetle:
-            guard instance.biome == .sand else { return (false, "仅限暖阳沙地缸") }
-            if !instance.enabledDecorIDs.contains("sand_pebbles") { return (false, "需摆放暖阳卵石滩") }
-            if succulentCount < 1 { return (false, "需多肉≥1") }
-            return (true, "条件已达标")
+            guard instance.biome == .sand else { return onlyBiome(.sand) }
+            if !instance.enabledDecorIDs.contains("sand_pebbles") { return needDecor("sand_pebbles") }
+            if succulentCount < 1 { return needPlant("succulent") }
+            return eligOK()
         case .scarab:
-            guard instance.biome == .sand else { return (false, "仅限暖阳沙地缸") }
-            if cactusCount < 1 { return (false, "需金琥仙人球≥1") }
-            if aloeCount < 1 { return (false, "需星点芦荟≥1") }
-            if instance.temperature < 27 { return (false, "需温度≥27°C(可开暖灯)") }
-            if instance.humidity > 42 { return (false, "需湿度≤42%") }
-            return (true, "条件已达标")
+            guard instance.biome == .sand else { return onlyBiome(.sand) }
+            if cactusCount < 1 { return needPlant("cactus") }
+            if aloeCount < 1 { return needPlant("aloe") }
+            if instance.temperature < 27 { return (false, TerrariumL10n.t("elig.need_temp_min_lamp", ["val": "27"])) }
+            if instance.humidity > 42 { return (false, TerrariumL10n.t("elig.need_humidity_max", ["val": "42"])) }
+            return eligOK()
         case .sandGecko:
-            guard instance.biome == .sand else { return (false, "仅限暖阳沙地缸") }
+            guard instance.biome == .sand else { return onlyBiome(.sand) }
             let sandPlants = succulentCount + aloeCount + cactusCount
-            if !instance.enabledDecorIDs.contains("sand_rock") { return (false, "需摆放风蚀红砂岩") }
-            if sandPlants < 2 { return (false, "需沙地植物≥2") }
-            if instance.temperature < 24 { return (false, "需温度≥24°C") }
-            return (true, "条件已达标")
+            if !instance.enabledDecorIDs.contains("sand_rock") { return needDecor("sand_rock") }
+            if sandPlants < 2 { return (false, TerrariumL10n.t("elig.need_sand_plants", ["count": "2"])) }
+            if instance.temperature < 24 { return (false, TerrariumL10n.t("elig.need_temp_min", ["val": "24"])) }
+            return eligOK()
         case .sandScorpion:
-            guard instance.biome == .sand else { return (false, "仅限暖阳沙地缸") }
-            if !instance.enabledDecorIDs.contains("sand_cairn") { return (false, "需摆放沙漠叠石堆") }
-            if !instance.enabledDecorIDs.contains("sand_rib_arch") { return (false, "需摆放枯木风蚀拱") }
-            if cactusCount < 1 { return (false, "需金琥仙人球≥1") }
-            if instance.temperature < 26 { return (false, "需温度≥26°C") }
-            return (true, "条件已达标")
+            guard instance.biome == .sand else { return onlyBiome(.sand) }
+            if !instance.enabledDecorIDs.contains("sand_cairn") { return needDecor("sand_cairn") }
+            if !instance.enabledDecorIDs.contains("sand_rib_arch") { return needDecor("sand_rib_arch") }
+            if cactusCount < 1 { return needPlant("cactus") }
+            if instance.temperature < 26 { return (false, TerrariumL10n.t("elig.need_temp_min", ["val": "26"])) }
+            return eligOK()
         case .desertMantis:
-            guard instance.biome == .sand else { return (false, "仅限暖阳沙地缸") }
+            guard instance.biome == .sand else { return onlyBiome(.sand) }
             let agaveCount = instance.plants.filter { $0.speciesID == "agave" && $0.stage != .withered }.count
-            if !instance.enabledDecorIDs.contains("sand_wood") { return (false, "需摆放白化沙木枝") }
-            if agaveCount < 1 { return (false, "需蓝叶龙舌兰≥1") }
-            if instance.temperature < 24 { return (false, "需温度≥24°C") }
-            return (true, "条件已达标")
+            if !instance.enabledDecorIDs.contains("sand_wood") { return needDecor("sand_wood") }
+            if agaveCount < 1 { return needPlant("agave") }
+            if instance.temperature < 24 { return (false, TerrariumL10n.t("elig.need_temp_min", ["val": "24"])) }
+            return eligOK()
         case .hornedToad:
-            guard instance.biome == .sand else { return (false, "仅限暖阳沙地缸") }
-            if !instance.enabledDecorIDs.contains("sand_cairn") { return (false, "需摆放沙漠叠石堆") }
-            if !instance.enabledDecorIDs.contains("sand_rock") { return (false, "需摆放风蚀红砂岩") }
-            if cactusCount < 1 { return (false, "需金琥仙人球≥1") }
-            if instance.temperature < 27 { return (false, "需温度≥27°C") }
-            return (true, "条件已达标")
+            guard instance.biome == .sand else { return onlyBiome(.sand) }
+            if !instance.enabledDecorIDs.contains("sand_cairn") { return needDecor("sand_cairn") }
+            if !instance.enabledDecorIDs.contains("sand_rock") { return needDecor("sand_rock") }
+            if cactusCount < 1 { return needPlant("cactus") }
+            if instance.temperature < 27 { return (false, TerrariumL10n.t("elig.need_temp_min", ["val": "27"])) }
+            return eligOK()
         case .leafInsect:
-            guard instance.biome == .rainforest else { return (false, "仅限热带雨林缸") }
-            if !instance.enabledDecorIDs.contains("rainforest_bark") { return (false, "需摆放朽木树洞") }
-            if succinctPlants.monsteraCount < 1 { return (false, "需龟背竹≥1") }
-            if instance.humidity < 65 { return (false, "需湿度≥65%") }
-            return (true, "条件已达标")
+            guard instance.biome == .rainforest else { return onlyBiome(.rainforest) }
+            if !instance.enabledDecorIDs.contains("rainforest_bark") { return needDecor("rainforest_bark") }
+            if succinctPlants.monsteraCount < 1 { return needPlant("monstera") }
+            if instance.humidity < 65 { return (false, TerrariumL10n.t("elig.need_humidity_min", ["val": "65"])) }
+            return eligOK()
         case .herculesBeetle:
-            guard instance.biome == .rainforest else { return (false, "仅限热带雨林缸") }
-            if !instance.enabledDecorIDs.contains("rainforest_bark") { return (false, "需摆放朽木树洞") }
-            if succinctPlants.orchidCount < 1 { return (false, "需热带兰花≥1") }
-            if instance.temperature < 24 { return (false, "需温度≥24°C") }
-            return (true, "条件已达标")
+            guard instance.biome == .rainforest else { return onlyBiome(.rainforest) }
+            if !instance.enabledDecorIDs.contains("rainforest_bark") { return needDecor("rainforest_bark") }
+            if succinctPlants.orchidCount < 1 { return needPlant("orchid") }
+            if instance.temperature < 24 { return (false, TerrariumL10n.t("elig.need_temp_min", ["val": "24"])) }
+            return eligOK()
         case .chameleon:
-            guard instance.biome == .rainforest else { return (false, "仅限热带雨林缸") }
-            if !instance.enabledDecorIDs.contains("rainforest_vine") { return (false, "需摆放藤蔓攀爬架") }
-            if succinctPlants.monsteraCount + succinctPlants.bromeliadCount < 2 { return (false, "需龟背竹/凤梨≥2") }
-            if instance.temperature < 25 { return (false, "需温度≥25°C(可开暖灯)") }
-            if instance.humidity < 70 { return (false, "需湿度≥70%") }
-            return (true, "条件已达标")
+            guard instance.biome == .rainforest else { return onlyBiome(.rainforest) }
+            if !instance.enabledDecorIDs.contains("rainforest_vine") { return needDecor("rainforest_vine") }
+            if succinctPlants.monsteraCount + succinctPlants.bromeliadCount < 2 { return (false, TerrariumL10n.t("elig.need_rainforest_core", ["count": "2"])) }
+            if instance.temperature < 25 { return (false, TerrariumL10n.t("elig.need_temp_min_lamp", ["val": "25"])) }
+            if instance.humidity < 70 { return (false, TerrariumL10n.t("elig.need_humidity_min", ["val": "70"])) }
+            return eligOK()
         case .dartFrog:
-            guard instance.biome == .rainforest else { return (false, "仅限热带雨林缸") }
-            if !instance.enabledDecorIDs.contains("rainforest_bromeliad_stump") { return (false, "需摆放积水凤梨朽桩") }
-            if succinctPlants.bromeliadCount < 1 { return (false, "需积水凤梨≥1") }
-            if instance.humidity < 72 { return (false, "需湿度≥72%") }
-            return (true, "条件已达标")
+            guard instance.biome == .rainforest else { return onlyBiome(.rainforest) }
+            if !instance.enabledDecorIDs.contains("rainforest_bromeliad_stump") { return needDecor("rainforest_bromeliad_stump") }
+            if succinctPlants.bromeliadCount < 1 { return needPlant("bromeliad") }
+            if instance.humidity < 72 { return (false, TerrariumL10n.t("elig.need_humidity_min", ["val": "72"])) }
+            return eligOK()
         case .blueMorpho:
-            guard instance.biome == .rainforest else { return (false, "仅限热带雨林缸") }
+            guard instance.biome == .rainforest else { return onlyBiome(.rainforest) }
             let pitcherCount = instance.plants.filter { $0.speciesID == "pitcher_plant" && $0.stage != .withered }.count
-            if succinctPlants.orchidCount < 1 { return (false, "需热带兰花≥1") }
-            if pitcherCount < 1 { return (false, "需猪笼草≥1") }
-            if instance.humidity < 70 { return (false, "需湿度≥70%") }
-            return (true, "条件已达标")
+            if succinctPlants.orchidCount < 1 { return needPlant("orchid") }
+            if pitcherCount < 1 { return needPlant("pitcher_plant") }
+            if instance.humidity < 70 { return (false, TerrariumL10n.t("elig.need_humidity_min", ["val": "70"])) }
+            return eligOK()
         case .redEyedFrog:
-            guard instance.biome == .rainforest else { return (false, "仅限热带雨林缸") }
+            guard instance.biome == .rainforest else { return onlyBiome(.rainforest) }
             let calatheaCount = instance.plants.filter { $0.speciesID == "calathea" && $0.stage != .withered }.count
-            if !instance.enabledDecorIDs.contains("rainforest_waterfall") { return (false, "需摆放雾化小瀑布石") }
-            if calatheaCount < 1 { return (false, "需孔雀竹芋≥1") }
-            if instance.humidity < 75 { return (false, "需湿度≥75%") }
-            return (true, "条件已达标")
+            if !instance.enabledDecorIDs.contains("rainforest_waterfall") { return needDecor("rainforest_waterfall") }
+            if calatheaCount < 1 { return needPlant("calathea") }
+            if instance.humidity < 75 { return (false, TerrariumL10n.t("elig.need_humidity_min", ["val": "75"])) }
+            return eligOK()
         case .cherryShrimp:
-            guard instance.biome == .aquatic else { return (false, "仅限碧波鱼缸") }
+            guard instance.biome == .aquatic else { return onlyBiome(.aquatic) }
             let marimoCount = instance.plants.filter { $0.speciesID == "marimo" && $0.stage != .withered }.count
-            if !instance.enabledDecorIDs.contains("aquatic_castle") { return (false, "需摆放陶瓷躲避屋") }
-            if marimoCount < 1 { return (false, "需莫斯藻球≥1") }
-            return (true, "条件已达标")
+            if !instance.enabledDecorIDs.contains("aquatic_castle") { return needDecor("aquatic_castle") }
+            if marimoCount < 1 { return needPlant("marimo") }
+            return eligOK()
         case .neonTetra:
-            guard instance.biome == .aquatic else { return (false, "仅限碧波鱼缸") }
+            guard instance.biome == .aquatic else { return onlyBiome(.aquatic) }
             let anubiasCount = instance.plants.filter { $0.speciesID == "anubias" && $0.stage != .withered }.count
-            if anubiasCount < 1 { return (false, "需皇冠水草≥1") }
-            if instance.humidity < 65 { return (false, "需溶氧≥65%") }
-            return (true, "条件已达标")
+            if anubiasCount < 1 { return needPlant("anubias") }
+            if instance.humidity < 65 { return (false, TerrariumL10n.t("elig.need_oxygen_min", ["val": "65"])) }
+            return eligOK()
         case .bettaFish:
-            guard instance.biome == .aquatic else { return (false, "仅限碧波鱼缸") }
+            guard instance.biome == .aquatic else { return onlyBiome(.aquatic) }
             let lotusCount = instance.plants.filter { $0.speciesID == "lotus" && $0.stage != .withered }.count
-            if lotusCount < 1 { return (false, "需迷你睡莲≥1") }
-            if instance.temperature < 24 { return (false, "需水温≥24°C") }
-            if instance.humidity < 72 { return (false, "需溶氧≥72%") }
-            return (true, "条件已达标")
+            if lotusCount < 1 { return needPlant("lotus") }
+            if instance.temperature < 24 { return (false, TerrariumL10n.t("elig.need_water_temp_min", ["val": "24"])) }
+            if instance.humidity < 72 { return (false, TerrariumL10n.t("elig.need_oxygen_min", ["val": "72"])) }
+            return eligOK()
         case .crayfish:
-            guard instance.biome == .aquatic else { return (false, "仅限碧波鱼缸") }
+            guard instance.biome == .aquatic else { return onlyBiome(.aquatic) }
             let aquaticPlants = instance.plants.filter { ($0.speciesID == "marimo" || $0.speciesID == "anubias" || $0.speciesID == "lotus") && $0.stage != .withered }.count
-            if !instance.enabledDecorIDs.contains("aquatic_bubble_rock") { return (false, "需摆放冒泡火山石") }
-            if !instance.enabledDecorIDs.contains("aquatic_castle") { return (false, "需摆放陶瓷躲避屋") }
-            if aquaticPlants < 1 { return (false, "需任意水草≥1") }
-            return (true, "条件已达标")
+            if !instance.enabledDecorIDs.contains("aquatic_bubble_rock") { return needDecor("aquatic_bubble_rock") }
+            if !instance.enabledDecorIDs.contains("aquatic_castle") { return needDecor("aquatic_castle") }
+            if aquaticPlants < 1 { return (false, TerrariumL10n.t("elig.need_any_aquatic_plant", ["count": "1"])) }
+            return eligOK()
         case .corydoras:
-            guard instance.biome == .aquatic else { return (false, "仅限碧波鱼缸") }
-            if !instance.enabledDecorIDs.contains("aquatic_bamboo_tube") { return (false, "需摆放莫斯竹筒屋") }
-            if !instance.enabledDecorIDs.contains("aquatic_driftwood") { return (false, "需摆放沉木水草石") }
-            if instance.humidity < 60 { return (false, "需溶氧≥60%") }
-            return (true, "条件已达标")
+            guard instance.biome == .aquatic else { return onlyBiome(.aquatic) }
+            if !instance.enabledDecorIDs.contains("aquatic_bamboo_tube") { return needDecor("aquatic_bamboo_tube") }
+            if !instance.enabledDecorIDs.contains("aquatic_driftwood") { return needDecor("aquatic_driftwood") }
+            if instance.humidity < 60 { return (false, TerrariumL10n.t("elig.need_oxygen_min", ["val": "60"])) }
+            return eligOK()
         case .otoCatfish:
-            guard instance.biome == .aquatic else { return (false, "仅限碧波鱼缸") }
+            guard instance.biome == .aquatic else { return onlyBiome(.aquatic) }
             let valCount = instance.plants.filter { $0.speciesID == "vallisneria" && $0.stage != .withered }.count
-            if !instance.enabledDecorIDs.contains("aquatic_seiryu_stone") { return (false, "需摆放青龙造景石组") }
-            if valCount < 1 { return (false, "需螺旋苦草≥1") }
-            if instance.humidity < 65 { return (false, "需溶氧≥65%") }
-            return (true, "条件已达标")
+            if !instance.enabledDecorIDs.contains("aquatic_seiryu_stone") { return needDecor("aquatic_seiryu_stone") }
+            if valCount < 1 { return needPlant("vallisneria") }
+            if instance.humidity < 65 { return (false, TerrariumL10n.t("elig.need_oxygen_min", ["val": "65"])) }
+            return eligOK()
         case .crystalShrimp:
-            guard instance.biome == .aquatic else { return (false, "仅限碧波鱼缸") }
+            guard instance.biome == .aquatic else { return onlyBiome(.aquatic) }
             let ludCount = instance.plants.filter { $0.speciesID == "red_ludwigia" && $0.stage != .withered }.count
-            if !instance.enabledDecorIDs.contains("aquatic_bamboo_tube") { return (false, "需摆放莫斯竹筒屋") }
-            if ludCount < 1 { return (false, "需红蝴蝶水草≥1") }
-            if instance.humidity < 72 { return (false, "需溶氧≥72%") }
-            return (true, "条件已达标")
+            if !instance.enabledDecorIDs.contains("aquatic_bamboo_tube") { return needDecor("aquatic_bamboo_tube") }
+            if ludCount < 1 { return needPlant("red_ludwigia") }
+            if instance.humidity < 72 { return (false, TerrariumL10n.t("elig.need_oxygen_min", ["val": "72"])) }
+            return eligOK()
         }
     }
 

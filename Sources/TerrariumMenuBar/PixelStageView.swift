@@ -963,7 +963,7 @@ struct PixelStageView: View {
             if state.isSleeping {
                 drawFullImage("tank_lid_sleep")
                 context.draw(
-                    Text("Zzz... 休眠透气盖已合上")
+                    Text(TerrariumL10n.t("stage.sleep_overlay"))
                         .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
                         .foregroundColor(Color(red: 0.99, green: 0.90, blue: 0.54)),
                     at: CGPoint(x: size.width / 2, y: 34)
@@ -972,7 +972,7 @@ struct PixelStageView: View {
         }
         .frame(width: 224 * scale, height: 176 * scale)
         .overlay(alignment: .topLeading) {
-            Text("Day \(state.activeContainerDays)")
+            Text(TerrariumL10n.t("ui.day_badge", ["days": "\(state.activeContainerDays)"]))
                 .font(.system(size: max(10, 5.2 * scale), weight: .bold, design: .monospaced))
                 .padding(.horizontal, 3.0 * scale)
                 .padding(.vertical, 1.5 * scale)
@@ -1136,11 +1136,17 @@ struct PixelStageSnapshotCard: View {
         VStack(spacing: 0) {
             PixelStageView(state: state, scale: 4.0, isSnapshot: true)
             HStack {
-                Text("🌿 \(state.activeContainerName)  ·  \(state.currentBiome.rawValue)")
+                Text(TerrariumL10n.t("stage.snapshot_footer", [
+                    "tank": state.activeContainerName,
+                    "biome": state.currentBiome.localizedName
+                ]))
                     .font(.system(size: 18, weight: .bold, design: .monospaced))
                     .foregroundColor(Color(red: 0.85, green: 0.95, blue: 0.82))
                 Spacer()
-                Text("\(state.codexMilestoneTitle)  |  \(dateLabel)")
+                Text(TerrariumL10n.t("stage.snapshot_sub", [
+                    "title": state.codexMilestoneTitle,
+                    "date": dateLabel
+                ]))
                     .font(.system(size: 14, weight: .semibold, design: .monospaced))
                     .foregroundColor(Color(red: 0.56, green: 0.72, blue: 0.59))
             }

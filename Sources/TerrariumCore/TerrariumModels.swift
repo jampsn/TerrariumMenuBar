@@ -21,12 +21,37 @@ public enum TerrariumBiome: String, CaseIterable, Identifiable, Codable {
     public var isPlayableInCurrentWave: Bool {
         true
     }
+
+    private var l10nKey: String {
+        switch self {
+        case .meadow: return "meadow"
+        case .sand: return "sand"
+        case .rainforest: return "rainforest"
+        case .aquatic: return "aquatic"
+        }
+    }
+
+    public var localizedName: String {
+        TerrariumL10n.t("biome.\(l10nKey).full")
+    }
+
+    public var localizedShortName: String {
+        TerrariumL10n.t("biome.\(l10nKey).short")
+    }
 }
 
 public enum ThermalMode: String, Codable, Equatable, CaseIterable {
     case natural = "自然"
     case heating = "加热"
     case cooling = "降温"
+
+    public var localizedName: String {
+        switch self {
+        case .natural: return TerrariumL10n.t("thermal.natural")
+        case .heating: return TerrariumL10n.t("thermal.heating")
+        case .cooling: return TerrariumL10n.t("thermal.cooling")
+        }
+    }
 }
 
 public enum SceneAtmosphere: String, CaseIterable, Identifiable, Codable {
@@ -45,6 +70,23 @@ public enum SceneAtmosphere: String, CaseIterable, Identifiable, Codable {
         case .warm: return "bg_room_warm"
         }
     }
+
+    private var l10nKey: String {
+        switch self {
+        case .day: return "day"
+        case .night: return "night"
+        case .rain: return "rain"
+        case .warm: return "warm"
+        }
+    }
+
+    public var localizedName: String {
+        TerrariumL10n.t("atmosphere.\(l10nKey).full")
+    }
+
+    public var localizedShortName: String {
+        TerrariumL10n.t("atmosphere.\(l10nKey).short")
+    }
 }
 
 public enum PopoverTab: String, CaseIterable {
@@ -52,6 +94,15 @@ public enum PopoverTab: String, CaseIterable {
     case decor = "造景"
     case critters = "生物"
     case codex = "图鉴"
+
+    public var localizedTitle: String {
+        switch self {
+        case .terrarium: return TerrariumL10n.t("tab.terrarium")
+        case .decor: return TerrariumL10n.t("tab.decor")
+        case .critters: return TerrariumL10n.t("tab.critters")
+        case .codex: return TerrariumL10n.t("tab.codex")
+        }
+    }
 }
 
 public struct GridCoord: Codable, Hashable, Equatable {
@@ -70,6 +121,10 @@ public enum PlantStage: String, Codable, Equatable {
     case lushDew
     case wilting
     case withered
+
+    public var localizedName: String {
+        TerrariumL10n.t("stage.\(rawValue)")
+    }
 }
 
 public struct PlantInstance: Identifiable, Codable, Equatable {
@@ -131,6 +186,10 @@ public enum CritterKind: String, Codable, CaseIterable {
     case corydoras = "corydoras"
     case otoCatfish = "oto_catfish"
     case crystalShrimp = "crystal_shrimp"
+
+    public var localizedName: String {
+        TerrariumL10n.t("critter.\(rawValue).name")
+    }
 }
 
 public enum TankFrameSkin: String, Codable, CaseIterable, Identifiable {
@@ -142,13 +201,7 @@ public enum TankFrameSkin: String, Codable, CaseIterable, Identifiable {
 
     public var id: String { rawValue }
     public var displayName: String {
-        switch self {
-        case .classic: return "经典深绿"
-        case .wood: return "温润原木"
-        case .brass: return "复古黄铜"
-        case .frosted: return "极简磨砂白"
-        case .obsidian: return "黑曜石金边"
-        }
+        TerrariumL10n.t("skin.\(rawValue)")
     }
     public var cost: Int {
         switch self {
@@ -171,6 +224,20 @@ public enum FoodChainGroup: String, Codable, Equatable {
     case aquaticPeaceful = "温顺鱼虾共生群"
     case aquaticBetta = "半月斗鱼领地"
     case aquaticPredator = "螯虾水底领地"
+
+    public var localizedName: String {
+        switch self {
+        case .meadowInsects: return TerrariumL10n.t("foodchain.meadow_insects")
+        case .meadowPredator: return TerrariumL10n.t("foodchain.meadow_predator")
+        case .sandBeetles: return TerrariumL10n.t("foodchain.sand_beetles")
+        case .sandPredator: return TerrariumL10n.t("foodchain.sand_predator")
+        case .rainforestInsects: return TerrariumL10n.t("foodchain.rainforest_insects")
+        case .rainforestPredator: return TerrariumL10n.t("foodchain.rainforest_predator")
+        case .aquaticPeaceful: return TerrariumL10n.t("foodchain.aquatic_peaceful")
+        case .aquaticBetta: return TerrariumL10n.t("foodchain.aquatic_betta")
+        case .aquaticPredator: return TerrariumL10n.t("foodchain.aquatic_predator")
+        }
+    }
 }
 
 public struct CritterShopSpec: Identifiable, Equatable {
@@ -586,9 +653,10 @@ public struct TerrariumSaveData: Codable, Equatable {
         firstStartedAt: Date? = nil
     ) {
         let start = firstStartedAt ?? lastSavedAt
+        let defaultMeadowName = TerrariumL10n.t("tank.default_name", ["biome": TerrariumBiome.meadow.localizedShortName, "index": "1"])
         let initialContainers = containers ?? [
             TerrariumContainer(
-                customName: "苔原缸 #1",
+                customName: defaultMeadowName,
                 createdAt: start,
                 instance: TerrariumInstanceState.empty(biome: .meadow, now: lastSavedAt)
             )
@@ -656,13 +724,13 @@ public struct TerrariumSaveData: Codable, Equatable {
             var pickedActive: UUID?
             for b in unlocked {
                 if let inst = map[b.rawValue] {
-                    let item = TerrariumContainer(customName: "\(b.rawValue) #1", createdAt: now, instance: inst)
+                    let item = TerrariumContainer(customName: TerrariumL10n.t("tank.default_name", ["biome": b.localizedShortName, "index": "1"]), createdAt: now, instance: inst)
                     if b == curBiome { pickedActive = item.id }
                     migrated.append(item)
                 }
             }
             if migrated.isEmpty {
-                let first = TerrariumContainer(customName: "苔原缸 #1", createdAt: now, instance: TerrariumInstanceState.empty(biome: .meadow, now: now))
+                let first = TerrariumContainer(customName: TerrariumL10n.t("tank.default_name", ["biome": TerrariumBiome.meadow.localizedShortName, "index": "1"]), createdAt: now, instance: TerrariumInstanceState.empty(biome: .meadow, now: now))
                 migrated = [first]
                 pickedActive = first.id
             }
@@ -680,7 +748,7 @@ public struct TerrariumSaveData: Codable, Equatable {
             self.firstStartedAt = savedAt
         } else {
             let legacyPoints = try c.decodeIfPresent(Int.self, forKey: .ecoPoints) ?? 2
-            let first = TerrariumContainer(customName: "苔原缸 #1", createdAt: now, instance: TerrariumInstanceState.empty(biome: .meadow, now: now))
+            let first = TerrariumContainer(customName: TerrariumL10n.t("tank.default_name", ["biome": TerrariumBiome.meadow.localizedShortName, "index": "1"]), createdAt: now, instance: TerrariumInstanceState.empty(biome: .meadow, now: now))
             self.schemaVersion = 5
             self.containers = [first]
             self.activeContainerID = first.id

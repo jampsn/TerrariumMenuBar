@@ -13,7 +13,10 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "TerrariumCore"
+            name: "TerrariumCore",
+            resources: [
+                .copy("Resources/Locales")
+            ]
         ),
         .executableTarget(
             name: "TerrariumMenuBar",

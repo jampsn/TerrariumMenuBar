@@ -942,37 +942,25 @@ final class StageAnimator: ObservableObject {
 
                 if isStartle {
                     state.recordCritterStartle(kind: c.kind, now: now)
-                    let reactText: String
-                    switch c.kind {
-                    case .snail: reactText = "缩壳!"
-                    case .pillBug: reactText = "缩成球!"
-                    case .rhinoBeetle, .herculesBeetle: reactText = "扬角!"
-                    case .leafInsect: reactText = "拟态晃!"
-                    case .chameleon: reactText = "虹彩!"
-                    case .crayfish: reactText = "举螯!"
-                    case .bettaFish: reactText = "展鳍!"
-                    case .cherryShrimp: reactText = "弹尾!"
-                    case .neonTetra: reactText = "散游!"
-                    case .fireNewt: reactText = "吐泡!"
-                    case .sandScorpion: reactText = "翘尾!"
-                    case .dartFrog: reactText = "亮斑!"
-                    case .corydoras: reactText = "钻沙!"
-                    case .ladybug: reactText = "收翅!"
-                    case .desertMantis: reactText = "亮镰!"
-                    case .hornedToad: reactText = "鼓刺!"
-                    case .blueMorpho: reactText = "振翅!"
-                    case .redEyedFrog: reactText = "瞪眼!"
-                    case .otoCatfish: reactText = "贴壁!"
-                    case .crystalShrimp: reactText = "弹跳!"
-                    default: reactText = "!"
-                    }
+                    let startleKinds: Set<CritterKind> = [
+                        .snail, .pillBug, .rhinoBeetle, .herculesBeetle, .leafInsect, .chameleon,
+                        .crayfish, .bettaFish, .cherryShrimp, .neonTetra, .fireNewt, .sandScorpion,
+                        .dartFrog, .corydoras, .ladybug, .desertMantis, .hornedToad, .blueMorpho,
+                        .redEyedFrog, .otoCatfish, .crystalShrimp
+                    ]
+                    let reactKey: String = {
+                        if c.kind == .herculesBeetle { return "critter.rhino_beetle.startle" }
+                        return startleKinds.contains(c.kind) ? "critter.\(c.kind.rawValue).startle" : "critter.startle.default"
+                    }()
+                    let reactText = TerrariumL10n.t(reactKey)
                     appendParticle(PixelParticle(x: screenPos.x, y: screenPos.y - 16, vx: 0, vy: -0.45, kind: .popup, life: 22, text: reactText))
                 } else {
                     let outcome = state.petCritter(kind: c.kind, at: CGPoint(x: screenPos.x, y: screenPos.y - 16), now: now)
                     let isSoulmate = (stage == .soulmate)
                     if isSoulmate,
                        let critterData = state.critters.first(where: { $0.kind == c.kind }) {
-                        let nick = (critterData.nickname?.isEmpty == false) ? (critterData.nickname ?? c.kind.rawValue) : c.kind.rawValue
+                        let fallback = TerrariumConfig.defaultNickname(for: c.kind)
+                        let nick = (critterData.nickname?.isEmpty == false) ? (critterData.nickname ?? fallback) : fallback
                         state.bannerNotice = TerrariumConfig.soulmateMicroNarrative(
                             nickname: nick,
                             kind: c.kind,
@@ -1322,9 +1310,9 @@ final class StageAnimator: ObservableObject {
                         critterRuntimes[cIdx].facingRight = (vPos.x >= cPos.x)
                         critterRuntimes[cIdx].behavior = .petted
                         critterRuntimes[cIdx].stateTicks = 0
-                        let huntCall = (critterRuntimes[cIdx].kind == .desertMantis) ? "挥镰!" : "吐舌!"
+                        let huntCall = TerrariumL10n.t((critterRuntimes[cIdx].kind == .desertMantis) ? "aerial.hunt_mantis" : "aerial.hunt_tongue")
                         appendParticle(PixelParticle(x: cPos.x, y: cPos.y - 14, vx: 0, vy: -0.4, kind: .popup, life: 22, text: huntCall))
-                        appendParticle(PixelParticle(x: vPos.x, y: vPos.y - 10, vx: 0, vy: -0.5, kind: .popup, life: 22, text: "溜了!"))
+                        appendParticle(PixelParticle(x: vPos.x, y: vPos.y - 10, vx: 0, vy: -0.5, kind: .popup, life: 22, text: TerrariumL10n.t("aerial.flee")))
 
                         v.phase = .fleeing
                         v.phaseTicks = 0

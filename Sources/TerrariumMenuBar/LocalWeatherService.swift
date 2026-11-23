@@ -2,7 +2,7 @@ import Foundation
 
 struct LocalWeatherReading: Equatable {
     let tempC: Int
-    let city: String
+    let city: String?
     let fetchedAt: Date
 }
 
@@ -50,14 +50,14 @@ enum LocalWeatherService {
         }
     }
 
-    private static func fetchLocation() async -> (lat: Double, lon: Double, city: String)? {
+    private static func fetchLocation() async -> (lat: Double, lon: Double, city: String?)? {
         if let primary = await fetchFromGeoJS() {
             return primary
         }
         return await fetchFromIPWho()
     }
 
-    private static func fetchFromGeoJS() async -> (lat: Double, lon: Double, city: String)? {
+    private static func fetchFromGeoJS() async -> (lat: Double, lon: Double, city: String?)? {
         guard let url = URL(string: "https://get.geojs.io/v1/ip/geo.json") else { return nil }
         var request = URLRequest(url: url)
         request.timeoutInterval = 4.0
@@ -70,13 +70,13 @@ enum LocalWeatherService {
                 return nil
             }
             let city = decoded.city?.trimmingCharacters(in: .whitespacesAndNewlines)
-            return (lat, lon, (city?.isEmpty == false) ? city! : "本地")
+            return (lat, lon, (city?.isEmpty == false) ? city! : nil)
         } catch {
             return nil
         }
     }
 
-    private static func fetchFromIPWho() async -> (lat: Double, lon: Double, city: String)? {
+    private static func fetchFromIPWho() async -> (lat: Double, lon: Double, city: String?)? {
         guard let url = URL(string: "https://ipwho.is/") else { return nil }
         var request = URLRequest(url: url)
         request.timeoutInterval = 4.0
@@ -88,7 +88,7 @@ enum LocalWeatherService {
                 return nil
             }
             let city = decoded.city?.trimmingCharacters(in: .whitespacesAndNewlines)
-            return (lat, lon, (city?.isEmpty == false) ? city! : "本地")
+            return (lat, lon, (city?.isEmpty == false) ? city! : nil)
         } catch {
             return nil
         }

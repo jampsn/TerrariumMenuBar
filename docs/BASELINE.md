@@ -15,6 +15,7 @@
      - `TerrariumSimulation.swift`：分段步进仿真引擎（`<=60s` 步进）、离线结算、物种演化与防刷判定
      - `GridPathfinder.swift`：等距网格寻路与障碍/生态位避让
      - `TerrariumPersistence.swift`：原子存档读写（`~/Library/Application Support/TerrariumMenuBar/save.json`）
+     - `TerrariumL10n.swift` & `Resources/Locales/`：纯 `Foundation` 8 语种本地化引擎与 JSON 词典包（`zh-Hans` / `zh-Hant` / `en` / `ja` / `ko` / `es` / `de` / `fr`）
   2. `Sources/TerrariumMenuBar/`：表现与交互层
      - `TerrariumApp.swift`：应用入口、菜单栏图标与 `--self-test` 全量无头自检
      - `TerrariumState.swift`：主线程状态管理、30 秒后台 Tick 调度、`applicationWillTerminate` 强存
@@ -23,7 +24,7 @@
      - `StageAnimator.swift`：精灵动画状态机、VFX 粒子预算与轻抚/气泡/露水帧驱动
      - `LocalWeatherService.swift`：本地实时气温联动服务
      - `PixelAssetLoader.swift` & `Resources/Pixel/`：像素精灵表与静态图资产加载
-  3. `Sources/TerrariumCoreTestRunner/`：无头单元测试运行器（`main.swift`，当前 22 项核心测试）
+  3. `Sources/TerrariumCoreTestRunner/`：无头单元测试运行器（`main.swift`，当前 24 项核心测试）
   4. `build_app.sh`：原生 `.app` 编译、资源拷贝（含 `AppIcon.icns`）与签名打包脚本（默认输出 `/tmp/terrarium-build/TerrariumMenuBar.app`）
 
 ---
@@ -85,6 +86,7 @@
 | **PM-13** | 存档与能耗 | 主档单文件解码失败会静默覆写丢档；`MenuBarExtra(.window)` 收起后不触发 `onDisappear`，导致 15fps `Timer` 后台空转。 | 写盘前轮转 `.bak` 备份、坏档隔离恢复；监听 `NSWindow.didResignKey/didBecomeKey` 暂停/恢复 15fps 渲染。 |
 | **PM-14** | 菜单栏窗体 | macOS `MenuBarExtra(.window)` 切换矮高度 Tab 或展开管理员面板时，容器未顶边锚定会导致窗口整体下移、上方出现透明留白。 | 根视图须设 `alignment: .top` + `.fixedSize(horizontal: false, vertical: true)`，并配合 `MenuBarWindowTopPinHelper` 锁定 `NSWindow.frame.maxY` 贴紧菜单栏下沿，只向下伸展。 |
 | **PM-15** | 精灵锚点 | 同一张植物精灵表内成熟/幼苗/枯萎帧底部实像素 `max_y` 常不一致（如卷叶蕨成熟帧 `22`、幼苗帧 `26`；兰花成熟 `21`、幼苗 `18`），若共用单一 `anchor.y` 会导致成熟株飘浮或下沉错位。 | 新增或修改精灵表后须逐帧检查 Alpha 实像素底沿 `max_y`，在 `PixelStageView` 中按帧态精确绑定 `anchor.y`；开源发布版统一保留 `Bundle.module` 明文 PNG 与符号，不启用符号剥离与 `Assets.car` 封包。 |
+| **PM-16** | 多语言与存档 | 枚举 `TerrariumBiome`/`ThermalMode`/`SceneAtmosphere` 与 `CritterPersistentState.personality` 以中文作为 `save.json` 持久化与数值匹配键，直接改 `rawValue` 会导致老存档坏档；SwiftPM 核心库资源在独立 `.app` 中位于 `Contents/Resources/TerrariumMenuBar_TerrariumCore.bundle`。 | 持久化键与性格逻辑匹配键恒定保留中文原值，展示层统一通过 `TerrariumL10n` + JSON 命名占位符映射；`TerrariumL10n` 须优先探测 `Bundle.main` 内资源包再回落 `Bundle.module`，`build_app.sh` 同步拷贝该 bundle 并声明 `CFBundleLocalizations`。 |
 
 ---
 
