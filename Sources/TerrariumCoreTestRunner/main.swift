@@ -897,11 +897,11 @@ runTest("test_hiddenReefBiome_unlockSalinityCoralAndMarineCritters") {
     var reefPts = 0
     var reefCodex: [String] = []
     TerrariumSimulation.advanceInstance(instance: &reef, ecoPoints: &reefPts, unlockedCodexIDs: &reefCodex, elapsedSeconds: 3600, allowRandomSpawn: false)
-    check((reef.salinity ?? 35.0) > 35.2, "海缸经过 1 小时水分蒸发后盐度应缓慢浓缩上升，实际=\(reef.salinity ?? 0)")
+    check((reef.salinity ?? 35.0) > 35.02 && (reef.salinity ?? 35.0) < 35.15, "海缸经过 1 小时水分蒸发后盐度应极其缓慢浓缩（~0.08‰/h），实际=\(reef.salinity ?? 0)")
 
-    reef.salinity = 38.5
-    TerrariumSimulation.updatePlants(instance: &reef, dt: 7500)
-    check(reef.plants[0].stage == .wilting, "海缸盐度过高(38.5‰)应触发珊瑚白化缩触手 (.wilting)")
+    reef.salinity = 39.5
+    TerrariumSimulation.updatePlants(instance: &reef, dt: 21600)
+    check(reef.plants[0].stage == .wilting, "海缸盐度过高即使持续 6 小时也仅保持白化缩触手 (.wilting)，绝不永久枯萎死亡")
     check(PlantStage.wilting.localizedName(for: .reef, salinity: reef.salinity) == "盐度过浓", "盐度过高时应显示'盐度过浓'")
 
     reef.salinity = 34.5
@@ -909,7 +909,7 @@ runTest("test_hiddenReefBiome_unlockSalinityCoralAndMarineCritters") {
     TerrariumSimulation.updatePlants(instance: &reef, dt: 300)
     check(reef.plants[0].stage == .mature || reef.plants[0].stage == .lushDew, "盐度恢复适宜后珊瑚应重新舒展")
 
-    // 4. 海星降低藻垢 & 海马与共生群互斥
+    // 4. 海星降低藻垢 & 黄金海马与全礁石生物和谐共游
     reef.glassFogLevel = 0.5
     reef.enabledDecorIDs = ["reef_sand_shells", "reef_live_rock"]
     reef.critters = [
@@ -918,8 +918,8 @@ runTest("test_hiddenReefBiome_unlockSalinityCoralAndMarineCritters") {
         CritterPersistentState(kind: .seahorse, residency: .resident, coord: GridCoord(col: 6, row: 6))
     ]
     let moved = TerrariumSimulation.normalizeFoodChainCompatibility(instance: &reef)
-    check(!moved.isEmpty, "幽蓝海马与珊瑚礁共生群互斥时应自动收纳冲突生物")
-    check(!TerrariumConfig.areCompatibleInSameTank(.clownfish, .seahorse), "小丑鱼与海马应属于不同食物链群落")
+    check(moved.isEmpty, "海缸全部礁石生物应可同缸和谐共生，不再强迫海马独养")
+    check(TerrariumConfig.areCompatibleInSameTank(.clownfish, .seahorse), "小丑鱼与黄金海马应属于同一礁石共生群")
     check(TerrariumConfig.areCompatibleInSameTank(.hermitCrab, .starfish), "寄居蟹与海星应属于同一礁石共生群")
 
     // 5. v5 存档兼容解码（无 salinity 字段）

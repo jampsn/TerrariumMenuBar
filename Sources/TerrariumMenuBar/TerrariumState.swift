@@ -672,9 +672,9 @@ final class TerrariumState: ObservableObject {
         inst.humidity = TerrariumSimulation.clampHumidity(inst.humidity + 12)
         inst.mistDewBoostSeconds = 180.0
         if inst.biome == .reef {
-            // 海缸「补淡水」：提升溶氧同时稀释盐度 -1.2‰
+            // 海缸「补淡水」：提升溶氧同时温和稀释盐度 -0.5‰（防连点补氧误冲出适宜区间）
             let curSal = inst.salinity ?? TerrariumConfig.defaultReefSalinity
-            inst.salinity = TerrariumSimulation.clampSalinity(curSal - 1.2)
+            inst.salinity = TerrariumSimulation.clampSalinity(curSal - 0.5)
         } else if inst.biome != .aquatic && inst.humidity >= TerrariumConfig.dewLightHumidityThreshold {
             inst.glassFogLevel = min(1.0, inst.glassFogLevel + 0.03)
         }

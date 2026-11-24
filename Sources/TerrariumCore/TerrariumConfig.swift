@@ -264,8 +264,7 @@ public enum TerrariumConfig {
         case .cherryShrimp, .neonTetra, .corydoras, .otoCatfish, .crystalShrimp: return .aquaticPeaceful
         case .bettaFish: return .aquaticBetta
         case .crayfish: return .aquaticPredator
-        case .clownfish, .starfish, .cleanerShrimp, .blueTang, .hermitCrab: return .reefSymbiosis
-        case .seahorse: return .reefSeahorse
+        case .clownfish, .starfish, .cleanerShrimp, .blueTang, .hermitCrab, .seahorse: return .reefSymbiosis
         }
     }
 
@@ -439,7 +438,7 @@ public enum TerrariumConfig {
                 critterSpec(kind: .cleanerShrimp, biome: .reef, cost: 14, group: .reefSymbiosis, assetName: "char_cleaner_shrimp_sheet", w: 18, h: 14),
                 critterSpec(kind: .blueTang, biome: .reef, cost: 26, group: .reefSymbiosis, assetName: "char_blue_tang_sheet", w: 22, h: 16),
                 critterSpec(kind: .hermitCrab, biome: .reef, cost: 15, group: .reefSymbiosis, assetName: "char_hermit_crab_sheet", w: 18, h: 15),
-                critterSpec(kind: .seahorse, biome: .reef, cost: 28, group: .reefSeahorse, assetName: "char_seahorse_sheet", w: 14, h: 20)
+                critterSpec(kind: .seahorse, biome: .reef, cost: 28, group: .reefSymbiosis, assetName: "char_seahorse_sheet", w: 14, h: 20)
             ]
         }
     }

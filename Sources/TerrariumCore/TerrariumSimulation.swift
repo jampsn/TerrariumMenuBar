@@ -252,11 +252,11 @@ public enum TerrariumSimulation {
                 }
             }
             if instance.biome == .reef {
-                // B2. 海缸水分蒸发浓缩：盐度缓慢上升（+0.30‰/h），加热或高温加速；活石拱门减缓 30% 波动
+                // B2. 海缸水分蒸发浓缩：盐度极其缓慢地上升（+0.08‰/h，挂机一晚约 +0.6‰），活石拱门减缓 30% 波动
                 let baseSal = instance.salinity ?? TerrariumConfig.defaultReefSalinity
-                let heatMult = (instance.thermalMode == .heating || instance.temperature >= 28) ? 1.35 : 1.0
+                let heatMult = (instance.thermalMode == .heating || instance.temperature >= 28) ? 1.25 : 1.0
                 let rockMult = instance.enabledDecorIDs.contains("reef_live_rock") ? 0.70 : 1.0
-                let salDelta = 0.30 * heatMult * rockMult * (dt / 3600.0)
+                let salDelta = 0.08 * heatMult * rockMult * (dt / 3600.0)
                 instance.salinity = min(TerrariumConfig.salinityRange.upperBound, baseSal + salDelta)
             }
 
@@ -819,7 +819,9 @@ public enum TerrariumSimulation {
             if isUnhealthy {
                 p.wiltSeconds += dt
                 p.dewLevel = 0
-                if p.wiltSeconds >= TerrariumConfig.plantWitherThresholdSeconds {
+                // 海缸珊瑚失衡仅白化缩触手 (.wilting)，绝不永久枯萎死亡，保障挂机过夜零损失
+                let allowWither = !isReefCoral
+                if allowWither && p.wiltSeconds >= TerrariumConfig.plantWitherThresholdSeconds {
                     p.stage = .withered
                 } else if p.wiltSeconds >= TerrariumConfig.plantWiltThresholdSeconds {
                     p.stage = .wilting

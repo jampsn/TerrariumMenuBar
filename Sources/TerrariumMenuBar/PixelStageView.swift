@@ -957,22 +957,31 @@ struct PixelStageView: View {
 
             drawFullImage("tank_front_glass")
 
-            // Pass 7b: 仅留柔和光锥/风锥氛围叠加在前玻璃外层（器材本体已在 Pass 1b 后壁内层绘制，绝不挡鱼）
-            if state.currentBiome == .reef && !state.isSleeping {
-                // 海缸日间 45° 水下焦散光束；Night 模式切换为深海荧光蓝紫珊瑚灯锥
-                var reefCone = Path()
-                reefCone.move(to: CGPoint(x: 68 * scale, y: 32 * scale))
-                reefCone.addLine(to: CGPoint(x: 156 * scale, y: 32 * scale))
-                reefCone.addLine(to: CGPoint(x: 186 * scale, y: 120 * scale))
-                reefCone.addLine(to: CGPoint(x: 42 * scale, y: 120 * scale))
-                reefCone.closeSubpath()
-                let isNightReef = (state.atmosphere == .night)
-                context.fill(
-                    reefCone,
-                    with: .color(isNightReef
-                                 ? Color(red: 0.34, green: 0.24, blue: 0.96).opacity(0.11)
-                                 : Color(red: 0.42, green: 0.88, blue: 1.0).opacity(0.06))
+            // Pass 7b: 海缸顶部跨缸支架灯具实体 + 柔和荧光光晕（有灯才有光，绝不凭空生成色块）
+            if state.currentBiome == .reef {
+                let isNightReef = (!state.isSleeping && state.atmosphere == .night)
+                drawSheetFrame(
+                    in: &context,
+                    sheet: "equip_reef_lamp",
+                    frameIndex: isNightReef ? 1 : 0,
+                    frameSize: CGSize(width: 68, height: 16),
+                    screenPos: CGPoint(x: 112, y: 27),
+                    anchor: CGPoint(x: 34, y: 15)
                 )
+                if isNightReef {
+                    let nightGlowRect = CGRect(x: 84 * scale, y: 24 * scale, width: 56 * scale, height: 84 * scale)
+                    context.fill(
+                        Path(nightGlowRect),
+                        with: .linearGradient(
+                            Gradient(colors: [
+                                Color(red: 0.34, green: 0.24, blue: 0.96).opacity(0.11),
+                                Color.clear
+                            ]),
+                            startPoint: CGPoint(x: 112 * scale, y: 24 * scale),
+                            endPoint: CGPoint(x: 112 * scale, y: 108 * scale)
+                        )
+                    )
+                }
             }
             if state.hasHeatLamp && !isWaterTank && !state.isSleeping && state.thermalMode == .heating {
                 var cone = Path()

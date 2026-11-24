@@ -38,7 +38,7 @@ enum AppUpdateService {
     }
 
     static func currentShortVersion() -> String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.1"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2.2"
     }
 
     static func normalizeVersion(_ raw: String) -> String {

@@ -59,7 +59,7 @@ struct TerrariumMenuBarApp: App {
             "tank_back_glass", "tank_front_glass", "tank_lid_sleep",
             "terrain_meadow_dry", "terrain_meadow_wet", "terrain_sand_dry", "terrain_sand_wet", "terrain_rainforest_dry", "terrain_rainforest_wet", "terrain_aquatic_clean", "terrain_aquatic_murky", "terrain_reef_clean", "terrain_reef_murky",
             "tank_water_overlay", "tank_reef_water_overlay", "vfx_bubble_sheet", "env_aquatic_feeding_ring", "plant_lotus_stem",
-            "equip_heat_lamp", "equip_cooling_fan", "equip_aquarium_heater",
+            "equip_heat_lamp", "equip_cooling_fan", "equip_aquarium_heater", "equip_reef_lamp",
             "env_shallow_pool", "env_driftwood", "env_boulder", "env_pebbles", "env_sand_rock", "env_sand_wood", "env_food_bowl",
             "env_rainforest_vine", "env_rainforest_waterfall", "env_rainforest_bark",
             "env_aquatic_bubble_rock", "env_aquatic_driftwood", "env_aquatic_castle",
